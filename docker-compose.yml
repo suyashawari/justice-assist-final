@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # 1. The Flask Backend
+  backend:
+    build: ./backend/justiceassist
+    container_name: justice_backend
+    restart: always
+    environment:
+      - DATABASE_URL=sqlite:///dev.db
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      # IMPORTANT: Replace these with your actual keys before deploying
+      - GEMINI_API_KEYS=AIzaSyAByHfX8n_OJieP3IvZCC14U_iTAGZeKhM,AIzaSyDRFcE9POzJCqvg6J8dVbAncYdNFglSyAY,AIzaSyBRnUNKZkh8Iok6wuYb-jR9ERdHraKKCJM
+      - OPENAI_API_KEY=your_openai_key_here
+      - REACT_APP_API_URL=/
+    volumes:
+      - ./backend/justiceassist/uploads:/app/uploads
+      - ./backend/justiceassist/instance:/app/instance
+    depends_on:
+      - redis
+
+  # 2. The AI Background Worker (RQ)
+  worker:
+    build: ./backend/justiceassist
+    container_name: justice_worker
+    restart: always
+    # We use SimpleWorker to be safe on all architectures
+    command: rq worker --worker-class 'rq.worker.SimpleWorker' --url redis://redis:6379/0
+    environment:
+      - DATABASE_URL=sqlite:///dev.db
+      - GEMINI_API_KEYS=your_google_gemini_key_here
+      - OPENAI_API_KEY=your_openai_key_here
+    volumes:
+      - ./backend/justiceassist/uploads:/app/uploads
+      - ./backend/justiceassist/instance:/app/instance
+    depends_on:
+      - redis
+      - backend
+
+  # 3. The React Frontend
+  frontend:
+    build: ./frontend/JusticeAssist
+    container_name: justice_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  # 4. Redis Database (For the Worker Queue)
+  redis:
+    image: "redis:alpine"
+    container_name: justice_redis
+    restart: always

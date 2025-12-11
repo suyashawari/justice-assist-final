@@ -1,0 +1,155 @@
+.guidance-container {
+    display: flex;
+    flex-direction: column;
+    padding: 3rem;
+    justify-content: center;
+    font-style: normal;
+    font-weight: 500;
+    background-color: var(--bg-color); /* UPDATED */
+    color: var(--text-color); /* UPDATED */
+}
+
+.cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    justify-content: center;
+}
+
+.guidance-card {
+    background: var(--card-color); /* UPDATED */
+    border: 1px solid var(--border-color); /* ADDED */
+    border-radius: 1.2rem;
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.12);
+    padding: 1.5rem;
+    transition: transform 0.3s ease;
+    text-align: center;
+    cursor: pointer;
+}
+
+.guidance-card:hover {
+    transform: translateY(-8px);
+}
+
+.guidance-img {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    border-radius: 0.8rem;
+    margin-bottom: 1rem;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    z-index: 999;
+}
+
+.modal-card {
+    background: var(--card-color); /* UPDATED */
+    border-radius: 1.5rem;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+    padding: 2rem;
+    width: 90%;
+    max-width: 700px;
+    animation: scaleIn 0.2s ease-out;
+    position: relative;
+}
+
+.flipped-card {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) !important;
+    z-index: 1001;
+    width: 90%;
+    max-width: 700px;
+    height: auto;
+    max-height: 90vh;
+    background: var(--card-color); /* UPDATED */
+    border: 1px solid var(--border-color); /* ADDED */
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+    border-radius: 1.5rem;
+    padding: 2rem;
+    color: var(--text-color); /* UPDATED */
+    transition: all 0.4s ease;
+    align-items: center;
+}
+
+@keyframes scaleIn {
+    from {
+      transform: scale(0.9);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+}
+
+.modal-card h2 {
+    font-size: 1.8rem;
+    color: var(--text-color); /* UPDATED */
+    margin-bottom: 0.5rem;
+}
+
+.modal-card p {
+    line-height: 1.6;
+    margin-top: 1rem;
+    color: var(--text-secondary-color); /* UPDATED */
+}
+
+.modal-video {
+    width: 100%;
+    height: 280px;
+    object-fit: cover;
+    border-radius: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.card-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.report-btn,
+.know-btn,
+.back-btn {
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+    border: none;
+}
+
+.report-btn {
+    background: var(--primary-color); /* UPDATED */
+    color: #fff;
+}
+
+.know-btn {
+    background: transparent;
+    color: var(--text-color); /* UPDATED */
+    border: 2px solid var(--primary-color); /* UPDATED */
+}
+
+.know-btn:hover {
+    background: var(--primary-color); /* UPDATED */
+    color: #fff;
+}
+
+.back-btn {
+    background: var(--primary-color); /* UPDATED */
+    color: white;
+    margin-top: 1.5rem;
+}

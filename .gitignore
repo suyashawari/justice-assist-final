@@ -1,0 +1,15 @@
+# Ignore dependency folders
+node_modules/
+venv/
+__pycache__/
+.pytest_cache/
+
+# Ignore Environment Secrets
+.env
+env/
+
+# Ignore Build artifacts
+build/
+dist/
+*.pyc
+.DS_Store

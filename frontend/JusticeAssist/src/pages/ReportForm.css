@@ -1,0 +1,261 @@
+.report-container {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 30px 25px;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  font-family: 'Poppins', sans-serif;
+  position: relative; /* Added for positioning the import button */
+}
+
+/* --- New Styles for JSON Import Feature --- */
+
+.json-import-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background-color: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.json-import-btn:hover {
+  background-color: var(--button-hover-bg);
+}
+
+.json-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 400px;
+  height: 100vh;
+  background-color: var(--card-color);
+  border-right: 1px solid var(--border-color);
+  box-shadow: 5px 0 25px rgba(0, 0, 0, 0.15);
+  z-index: 1010;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+}
+
+.json-panel.open {
+  transform: translateX(0);
+}
+
+.json-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.json-panel-header h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.close-panel-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-secondary-color);
+  cursor: pointer;
+}
+
+.json-panel textarea {
+  flex-grow: 1;
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  border-radius: 8px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.9rem;
+  resize: none;
+  margin-bottom: 1rem;
+}
+
+.fill-form-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background-color: #28a745;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.fill-form-btn:hover {
+  background-color: #218838;
+}
+
+
+/* --- Existing Form Styles --- */
+
+.form-title {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 25px;
+  color: var(--text-color);
+}
+
+.styled-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-row label {
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.form-split {
+  display: flex;
+  gap: 10px;
+}
+
+.form-split input.short-input {
+  width: 80px;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="datetime-local"],
+select,
+textarea {
+  padding: 10px 12px;
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: all 0.3s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(63, 114, 175, 0.2);
+}
+
+.floating-input select {
+  width: 100%;
+}
+
+.toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.toggle-input {
+  display: none;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 28px;
+  background-color: #ccc;
+  border-radius: 34px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.toggle-switch::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s;
+}
+
+.toggle-input:checked + .toggle-switch {
+  background-color: var(--primary-color);
+}
+
+.toggle-input:checked + .toggle-switch::before {
+  transform: translateX(22px);
+}
+
+.toggle-status {
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.form-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.submit-btn,
+.download-btn {
+  flex: 1;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.submit-btn {
+  background: var(--dark-blue);
+}
+
+.download-btn {
+  background: #28a745;
+}
+
+.submit-btn:hover {
+  background: var(--button-hover-bg);
+  transform: translateY(-2px);
+}
+
+.download-btn:hover {
+  background: #218838;
+  transform: translateY(-2px);
+}
+
+@media screen and (max-width: 600px) {
+  .form-split {
+    flex-direction: column;
+  }
+}

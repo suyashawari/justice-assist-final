@@ -1,0 +1,98 @@
+.cyberblogs-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    font-family: "Inter", "Roboto", sans-serif;
+    color: var(--text-color); /* UPDATED */
+    line-height: 1.7;
+    background-color: var(--bg-color); /* UPDATED */
+}
+
+.cyberblogs-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    color: var(--text-color); /* UPDATED */
+}
+
+.cyberblogs-intro {
+    font-size: 1.1rem;
+    text-align: left;
+    color: var(--text-secondary-color); /* UPDATED */
+    margin-bottom: 2rem;
+}
+
+.cyberblog-article {
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border-color); /* UPDATED */
+}
+
+.cyberblog-heading {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--text-color); /* UPDATED */
+}
+
+.cyberblog-image {
+    width: 100%;
+    max-height: 400px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+}
+
+.cyberblog-section {
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    text-align: justify;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.cyberblog-section-image {
+    width: 40%;
+    max-width: 200px;
+    object-fit: cover;
+    border-radius: 10px;
+    float: left;
+    margin-right: 1rem;
+    margin-bottom: 1rem;
+}
+
+.cyberblog-subheading {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-color); /* UPDATED */
+    flex-basis: 100%;
+}
+
+.cyberblog-content {
+    font-size: 1rem;
+    color: var(--text-secondary-color); /* UPDATED */
+    margin-bottom: 0.8rem;
+    flex: 1 1 55%;
+}
+
+.cyberblog-list {
+    list-style: disc inside;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    padding-left: 1rem;
+    color: var(--text-secondary-color); /* UPDATED */
+}
+
+.cyberblog-list li {
+    margin-bottom: 0.4rem;
+}
+
+.cyberblog-divider {
+    border: none;
+    height: 1px;
+    background-color: var(--border-color); /* UPDATED */
+    margin-top: 2rem;
+}

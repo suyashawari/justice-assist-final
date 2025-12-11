@@ -1,0 +1,23 @@
+.crime-detail {
+    padding: 2rem;
+    font-family: 'Segoe UI', sans-serif;
+    color: #112D4E;
+  }
+  
+  .back-btn {
+    background: #3F72AF;
+    color: white;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 1rem;
+  }
+  
+  .video-section iframe {
+    width: 100%;
+    max-width: 800px;
+    height: 400px;
+    border-radius: 10px;
+  }
+  

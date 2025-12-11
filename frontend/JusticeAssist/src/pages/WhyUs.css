@@ -1,0 +1,72 @@
+.whyus-container {
+    padding: 4rem 2rem;
+    background-color: var(--bg-color); /* UPDATED */
+    color: var(--text-color); /* UPDATED */
+    text-align: center;
+}
+
+.whyus-heading {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 2.5rem;
+    color: var(--primary-color); /* UPDATED */
+    font-weight: bold;
+}
+
+.whyus-cards {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2rem;
+    padding: 2rem;
+}
+
+.whyus-card {
+    background: var(--card-color); /* UPDATED */
+    border: 1px solid var(--border-color); /* ADDED */
+    border-radius: 20px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    width: 300px;
+    padding: 2rem;
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.whyus-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 8px 20px rgba(63, 114, 175, 0.2);
+    cursor: pointer;
+}
+
+.whyus-icon {
+    font-size: 3rem;
+    color: var(--primary-color); /* UPDATED */
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.whyus-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+    color: var(--text-color); /* UPDATED */
+}
+
+.whyus-card p {
+    font-size: 0.95rem;
+    color: var(--text-secondary-color); /* UPDATED */
+    line-height: 1.5;
+}
+
+.whyus-subheading {
+    font-size: 1.2rem;
+    color: var(--text-secondary-color); /* UPDATED */
+    font-weight: 600;
+    max-width: 700px;
+    margin: 0 auto 3rem auto;
+}

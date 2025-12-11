@@ -1,0 +1,146 @@
+.cyber-laws-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3rem 1rem;
+    font-family: 'Poppins', sans-serif;
+    color: var(--text-color); /* UPDATED */
+    background: var(--bg-color); /* UPDATED */
+    min-height: 100vh;
+}
+
+.page-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    text-align: center;
+    color: var(--text-color); /* UPDATED */
+    margin-bottom: 0.5rem;
+}
+
+.intro {
+    text-align: center;
+    color: var(--text-secondary-color); /* UPDATED */
+    margin-bottom: 3rem;
+    font-size: 1.1rem;
+}
+
+/* Category title colors are kept static for branding */
+.category-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 3px solid transparent;
+    padding-bottom: 0.25rem;
+    transition: border-color 0.3s ease;
+}
+.category-title.blue { color: #0284c7; border-color: #0284c7; }
+.category-title.purple { color: #7c3aed; border-color: #7c3aed; }
+
+.cyber-laws-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+}
+
+/* Using a single card style for easier theme management */
+.law-card {
+    background: var(--card-color); /* UPDATED */
+    border: 1px solid var(--border-color); /* ADDED */
+    border-radius: 1rem;
+    padding: 1.75rem;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+
+.law-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+}
+
+.law-header {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: left;
+    margin-bottom: 1rem;
+}
+
+.law-header h4 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary-color); /* UPDATED */
+}
+
+.law-header span {
+    font-size: 0.875rem;
+    color: var(--text-secondary-color); /* UPDATED */
+    font-weight: 500;
+}
+
+.description {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    text-align: justify;
+    margin-bottom: 0.75rem;
+    color: var(--text-color); /* UPDATED */
+}
+
+.preventive {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 0.75rem;
+}
+
+.preventive li {
+    position: relative;
+    padding-left: 1.5rem;
+    margin-bottom: 0.3rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary-color); /* UPDATED */
+}
+
+/* Static color for the icon is intentional */
+.preventive li::before {
+    content: "⚡";
+    position: absolute;
+    left: 0;
+    color: #facc15;
+}
+
+.example {
+    font-style: italic;
+    color: var(--primary-color); /* UPDATED */
+    margin-top: 0.5rem;
+}
+
+.lang-switcher {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.lang-switcher button {
+    background: var(--card-color); /* UPDATED */
+    border: 1px solid var(--border-color); /* UPDATED */
+    color: var(--text-color); /* UPDATED */
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.lang-switcher button:hover {
+    background: var(--bg-color); /* UPDATED */
+}
+
+.lang-switcher button.active {
+    background: var(--primary-color); /* UPDATED */
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-color: var(--primary-color); /* UPDATED */
+}
