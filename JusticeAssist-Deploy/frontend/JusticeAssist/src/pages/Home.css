@@ -1,0 +1,267 @@
+/* src/pages/Home.css (Complete, Updated with Dark Mode Variables) */
+
+.home-container {
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--bg-color); /* CHANGED: Was #F9F7F7 */
+  color: var(--text-color); /* CHANGED: Was #112D4E */
+  scroll-behavior: smooth;
+}
+
+.hero {
+  text-align: center;
+  padding: 4rem 2rem;
+  /* CHANGED: Using CSS variables for the gradient */
+  background: linear-gradient(-45deg, var(--primary-color), var(--dark-blue), var(--primary-color), var(--dark-blue));
+  background-size: 400% 400%;
+  color: #F9F7F7; /* White text is fine for this dark background in both modes */
+  animation: gradientFlow 15s ease infinite, fadeIn 1.5s ease-in-out;
+}
+
+.hero h1 {
+  font-size: 2.8rem;
+  font-weight: bold;
+  color: #DBE2EF !important;
+  margin-bottom: 0.5rem;
+}
+
+.hero h1 span {
+  color: #DBE2EF !important;
+  font-weight: bold;
+}
+
+.hero p {
+  font-size: 1.2rem;
+  max-width: 700px;
+  margin: 0 auto 1.5rem;
+  opacity: 0;
+  animation: fadeIn 1.2s ease-in forwards 0.8s;
+  color: #DBE2EF !important;
+}
+
+.tagline {
+  font-size: 1.3rem;
+  font-family: 'Roboto', sans-serif;
+  line-height: 1.8;
+  color: #F9F7F7;
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+  animation: fadeIn 1.2s ease-in forwards 0.8s;
+}
+
+.cta-button {
+  background-color: var(--dark-blue); /* CHANGED: Was #112D4E */
+  color: #F9F7F7;
+  padding: 0.9rem 1.7rem;
+  border-radius: 12px;
+  font-weight: bold;
+  text-decoration: none;
+  transition: all 0.3s ease-in-out;
+  display: inline-block;
+}
+
+.cta-button:hover {
+  background-color: var(--button-hover-bg); /* CHANGED: Was #DBE2EF */
+  color: #F9F7F7; /* Keep text color light on hover */
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px rgba(17, 45, 78, 0.4);
+}
+
+.cta-secondary {
+  background-color: transparent;
+  color: var(--primary-color); /* CHANGED: Was #3F72AF */
+  border: 2px solid var(--primary-color); /* CHANGED: Was #3F72AF */
+}
+
+.cta-secondary:hover {
+  background-color: var(--primary-color); /* CHANGED: Was #3F72AF */
+  color: white;
+}
+
+.features {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 2rem 1rem;
+}
+
+.feature-card {
+  background-color: var(--card-color); /* CHANGED: Was #DBE2EF */
+  align-items: center;
+  padding: 2rem;
+  width: 100%;
+  max-width: 1000px;
+  border-radius: 15px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); /* Shadow is subtle, ok for both modes */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-color); /* ADDED: Border for better dark mode visibility */
+}
+
+.feature-card:hover {
+  transform: translateY(-6px) rotateZ(-1deg);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1); /* Hover shadow is fine */
+}
+
+.feature-card h3 {
+  color: var(--primary-color); /* CHANGED: Was #3F72AF */
+  margin-bottom: 1rem;
+}
+
+.feature-card p {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-up {
+  animation: slideUp 1s ease-in-out forwards;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(50px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeIn 1.2s ease-in forwards;
+}
+
+@keyframes gradientFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@media (max-width: 1024px) {
+  .hero h1 {
+    font-size: 2.2rem;
+  }
+
+  .hero p,
+  .tagline {
+    font-size: 1.1rem;
+  }
+
+  .feature-card {
+    width: 280px;
+  }
+}
+
+@media (max-width: 768px) {
+  .features {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .hero {
+    padding: 3rem 1.5rem;
+  }
+
+  .hero h1 {
+    font-size: 2rem;
+  }
+
+  .tagline {
+    font-size: 1.1rem;
+  }
+
+  .cta-button {
+    padding: 0.8rem 1.4rem;
+    font-size: 0.95rem;
+  }
+
+  .feature-card {
+    width: 90%;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero h1 {
+    font-size: 1.7rem;
+  }
+
+  .hero p,
+  .tagline {
+    font-size: 1rem;
+    padding: 0 1rem;
+  }
+
+  .cta-button {
+    font-size: 0.9rem;
+  }
+}
+
+/* --- Feature Sections --- */
+
+.chatbot-feature,
+.suspect-feature,
+.awareness-feature {
+  background: var(--bg-color); /* CHANGED: Was #f9f7f7 */
+  padding: 2rem;
+  border-radius: 1rem;
+  /* Removed shadow as the parent card already has one */
+}
+
+.chatbot-content,
+.suspect-guess,
+.awareness-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.chatbot-left, .feature-lottie, .awareness-left {
+  flex: 1;
+  min-width: 300px;
+  text-align: center;
+}
+
+.chatbot-right, .feature-text, .awareness-right {
+  flex: 1.2;
+  min-width: 300px;
+}
+
+.chatbot-heading,
+.feature-text h2,
+.awareness-right h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--text-color); /* CHANGED: Was #112D4E */
+}
+
+.chatbot-description,
+.feature-text p,
+.feature-text ul,
+.awareness-right p {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-secondary-color); /* CHANGED: Was #2b2b2b */
+}
+
+.feature-text ul {
+  padding-left: 1.5rem;
+  margin: 1rem 0;
+}
+
+.feature-text ul li {
+  margin-bottom: 0.5rem;
+  list-style: disc;
+}
+
+.awareness-buttons {
+  margin-top: 1rem;
+}
+
+.awareness-buttons .cta-button {
+  margin-right: 0.75rem;
+}

@@ -1,0 +1,25 @@
+.tab-btn {
+  padding: 0.75rem 1.5rem;
+  font-size: 1.125rem;
+  font-weight: 500;
+  text-transform: capitalize;
+  color: var(--text-secondary-color); /* UPDATED */
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.tab-btn:hover {
+  background-color: var(--card-color); /* UPDATED */
+  color: var(--primary-color); /* UPDATED */
+  transform: translateY(-2px);
+}
+
+.tab-btn.active {
+  font-weight: 600;
+  background-color: var(--card-color); /* UPDATED */
+  color: var(--primary-color); /* UPDATED */
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05); /* ADDED */
+}

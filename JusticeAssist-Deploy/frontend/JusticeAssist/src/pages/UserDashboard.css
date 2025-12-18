@@ -1,0 +1,281 @@
+.dashboard-container {
+    padding: 2rem 3rem;
+    background-color: var(--bg-color); /* UPDATED */
+    font-family: 'Poppins', sans-serif;
+    min-height: 100vh;
+}
+
+.dashboard-header {
+    margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--text-color); /* UPDATED */
+}
+
+.dashboard-header p {
+    font-size: 1.1rem;
+    color: var(--text-secondary-color); /* UPDATED */
+}
+
+.dashboard-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+}
+
+.stat-card {
+    background-color: var(--card-color); /* UPDATED */
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    border-left: 5px solid var(--primary-color); /* UPDATED */
+    border-top: 1px solid var(--border-color); /* ADDED */
+}
+
+.stat-card h2 {
+    font-size: 2.8rem;
+    font-weight: 700;
+    color: var(--text-color); /* UPDATED */
+}
+
+.stat-card p {
+    font-size: 1rem;
+    color: var(--text-secondary-color); /* UPDATED */
+    margin-top: 0.5rem;
+}
+
+.dashboard-main-content {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+}
+
+.recent-reports h2,
+.reports-overview h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-color); /* UPDATED */
+    margin-bottom: 1.5rem;
+}
+
+.report-card {
+    background: var(--card-color); /* UPDATED */
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border: 1px solid var(--border-color); /* ADDED */
+}
+
+.report-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+}
+
+.report-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.report-card-header h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--primary-color); /* UPDATED */
+}
+
+/* Static colors for badges are intentional for consistent meaning */
+.status-badge {
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #fff;
+    text-transform: capitalize;
+}
+.status-submitted { background-color: #fd7e14; }
+.status-analyzing { background-color: #6f42c1; }
+.status-analyzed { background-color: #3F72AF; }
+.status-resolved { background-color: #28a745; }
+.status-pending { background-color: #6c757d; }
+
+
+.report-description, .report-date {
+    color: var(--text-color); /* UPDATED */
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.report-status-tracker {
+    display: flex;
+    justify-content: space-between;
+    margin: 1.5rem 0;
+    position: relative;
+}
+
+.report-status-tracker::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background-color: var(--border-color); /* UPDATED */
+    z-index: 1;
+}
+
+.status-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    width: 20%;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--border-color); /* UPDATED */
+    margin-bottom: 0.5rem;
+    transition: background-color 0.3s ease;
+}
+
+.status-step.completed .status-dot {
+    background-color: var(--primary-color); /* UPDATED */
+}
+
+.status-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary-color); /* UPDATED */
+    text-align: center;
+}
+
+.report-strength {
+    background-color: var(--bg-color); /* UPDATED */
+    padding: 1rem;
+    border-radius: 8px;
+    margin: 1.5rem 0;
+}
+
+.report-strength h4 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+}
+
+.report-strength ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.report-strength li {
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    position: relative;
+    padding-left: 20px;
+}
+
+/* Static colors for met/not-met are intentional */
+.report-strength li::before { content: '✓'; font-weight: bold; position: absolute; left: 0; top: 0; width: 12px; height: 12px; }
+.report-strength li.met { color: #28a745; }
+.report-strength li.met::before { color: #28a745; }
+.report-strength li.not-met { color: #dc3545; }
+.report-strength li.not-met::before { content: '✗'; color: #dc3545; }
+
+.view-details-btn {
+    width: 100%;
+    padding: 0.7rem;
+    background-color: var(--primary-color); /* UPDATED */
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.view-details-btn:hover {
+    background-color: var(--button-hover-bg); /* UPDATED */
+}
+
+.reports-overview {
+    background: var(--card-color); /* UPDATED */
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border-color); /* ADDED */
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+.no-reports-message {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-secondary-color); /* UPDATED */
+    background-color: var(--bg-color); /* UPDATED */
+    border-radius: 8px;
+}
+
+.loading-container, .error-container {
+    text-align: center;
+    padding: 5rem;
+    font-size: 1.5rem;
+}
+.error-container { color: #dc3545; }
+
+@media (max-width: 1024px) {
+    .dashboard-main-content {
+        grid-template-columns: 1fr;
+    }
+    .reports-overview {
+        margin-top: 2rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-container {
+        padding: 1.5rem;
+    }
+    .dashboard-header h1 {
+        font-size: 2rem;
+    }
+}
+
+.report-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.report-actions .view-details-btn,
+.report-actions .analysis-btn {
+    flex: 1;
+}
+
+.analysis-btn {
+    padding: 0.7rem;
+    background-color: var(--card-color); /* UPDATED */
+    color: var(--text-color); /* UPDATED */
+    border: 2px solid var(--primary-color); /* UPDATED */
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.analysis-btn:hover {
+    background-color: var(--primary-color); /* UPDATED */
+    color: #fff;
+}

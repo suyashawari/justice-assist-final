@@ -1,0 +1,108 @@
+.quiz-container {
+    max-width: 600px;
+    margin: auto;
+    background: var(--card-color); /* UPDATED */
+    border: 1px solid var(--border-color); /* ADDED */
+    padding: 2rem;
+    border-radius: 1.5rem;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.quiz-question {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: var(--text-color); /* UPDATED */
+    line-height: 1.6;
+}
+
+.quiz-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.quiz-option {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border-radius: 0.75rem;
+    background: var(--bg-color); /* UPDATED */
+    border: 1px solid var(--border-color); /* UPDATED */
+    text-align: left;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-color); /* UPDATED */
+    cursor: pointer;
+    transition: all 0.25s ease-in-out;
+}
+
+.quiz-option:hover:not(:disabled) {
+    background: var(--bg-color); /* UPDATED */
+    border-color: var(--primary-color); /* UPDATED */
+    color: var(--primary-color); /* ADDED */
+}
+
+.quiz-option:disabled {
+    cursor: not-allowed;
+    opacity: 0.9;
+}
+
+/* Static colors for feedback are intentional */
+.quiz-option.correct { background: #22c55e; color: white; animation: pulseGreen 1s; }
+.quiz-option.wrong { background: #ef4444; color: white; animation: shake 0.4s; }
+.quiz-option.neutral { background: #e2e8f0; color: #475569; }
+
+
+.quiz-progress {
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary-color); /* UPDATED */
+}
+
+.quiz-result {
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+.quiz-result h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--text-color); /* UPDATED */
+}
+
+.quiz-result p {
+    color: var(--text-secondary-color); /* UPDATED */
+    margin-bottom: 1rem;
+    font-size: 1rem;
+}
+
+.quiz-restart {
+    background: var(--primary-color); /* UPDATED */
+    color: #fff;
+    padding: 0.6rem 1.2rem;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    border: none;
+    transition: 0.3s ease;
+    cursor: pointer;
+}
+
+.quiz-restart:hover {
+    background: var(--button-hover-bg); /* UPDATED */
+}
+
+@keyframes pulseGreen {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    50% { transform: translateX(6px); }
+    75% { transform: translateX(-6px); }
+}

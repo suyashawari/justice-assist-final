@@ -1,0 +1,176 @@
+.suspect-guess-page {
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--bg-color); /* UPDATED */
+  color: var(--text-color); /* UPDATED */
+  padding-bottom: 4rem;
+}
+
+/* Hero section has static gradient, text color kept white for contrast */
+.suspect-hero {
+  background: linear-gradient(135deg, #112d4e, #3f72af);
+  color: #ffffff;
+  padding: 4rem 2rem;
+  text-align: center;
+  margin-bottom: 3rem;
+}
+.suspect-hero h1 { font-size: 2.8rem; font-weight: 700; margin-bottom: 1rem; }
+.suspect-hero p { font-size: 1.2rem; max-width: 800px; margin: 0 auto; opacity: 0.9; }
+
+
+.investigation-guide h2,
+.analysis-section h2,
+.disclaimer-section h2 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--text-color); /* UPDATED */
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.accordion-container {
+  max-width: 900px;
+  margin: 0 auto;
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color); /* ADDED */
+}
+
+.accordion-item {
+  border-bottom: 1px solid var(--border-color); /* UPDATED */
+}
+.accordion-item:last-child { border-bottom: none; }
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 1.5rem 2rem;
+  background-color: var(--card-color); /* UPDATED */
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-color); /* UPDATED */
+  transition: background-color 0.3s ease;
+}
+
+.accordion-header:hover {
+  background-color: var(--bg-color); /* UPDATED */
+}
+
+.accordion-icon {
+  font-size: 1.8rem;
+  margin-right: 1rem;
+  color: var(--primary-color); /* UPDATED */
+}
+
+.accordion-title { flex-grow: 1; }
+.accordion-arrow { font-size: 1.2rem; transition: transform 0.3s ease; }
+.accordion-arrow.open { transform: rotate(180deg); }
+
+.accordion-content {
+  padding: 1.5rem 2rem;
+  background-color: var(--bg-color); /* UPDATED */
+  text-align: left;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text-secondary-color); /* UPDATED */
+}
+
+.accordion-content p { margin-bottom: 1rem; }
+.accordion-content p:last-child { margin-bottom: 0; }
+.accordion-content strong { color: var(--text-color); } /* UPDATED */
+
+.analysis-section {
+  max-width: 900px;
+  margin: 4rem auto;
+  padding: 2rem;
+  background-color: var(--card-color); /* UPDATED */
+  border: 1px solid var(--border-color); /* ADDED */
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.analysis-section p {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+  color: var(--text-secondary-color); /* UPDATED */
+}
+
+.analysis-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.analysis-input-group textarea {
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--border-color); /* UPDATED */
+  background-color: var(--bg-color); /* ADDED */
+  color: var(--text-color); /* ADDED */
+  border-radius: 8px;
+  font-size: 1rem;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.analysis-input-group button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.5rem;
+  background-color: var(--primary-color); /* UPDATED */
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.analysis-input-group button:hover {
+  background-color: var(--button-hover-bg); /* UPDATED */
+}
+
+/* Analysis result colors are kept static for semantic meaning */
+.analysis-result {
+  background-color: #e0f7fa;
+  color: #00796b;
+  padding: 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Disclaimer colors are kept static for semantic meaning */
+.disclaimer-section {
+  max-width: 900px;
+  margin: 4rem auto;
+  padding: 2rem;
+  background-color: #fff3e0;
+  border-left: 5px solid #ff9800;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+.disclaimer-section h2 { color: #ff9800; margin-bottom: 1rem; }
+.disclaimer-section p { font-size: 1rem; line-height: 1.6; color: #555; text-align: left; }
+
+
+@media (max-width: 768px) {
+  .suspect-hero { padding: 3rem 1rem; }
+  .suspect-hero h1 { font-size: 2rem; }
+  .suspect-hero p { font-size: 1rem; }
+  .investigation-guide h2, .analysis-section h2, .disclaimer-section h2 { font-size: 1.8rem; }
+  .accordion-header { padding: 1rem 1.5rem; font-size: 1rem; }
+  .accordion-icon { font-size: 1.5rem; }
+  .accordion-content { padding: 1rem 1.5rem; font-size: 0.9rem; }
+  .analysis-section, .disclaimer-section { padding: 1.5rem; }
+  .analysis-input-group button { font-size: 1rem; }
+}

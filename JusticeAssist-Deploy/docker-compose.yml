@@ -1,0 +1,193 @@
+# # version: '3.8'
+
+# # services:
+# #   # --- Frontend (React + Nginx) ---
+# #   frontend:
+# #     build:
+# #       context: ./frontend/JusticeAssist
+# #       dockerfile: Dockerfile
+# #     container_name: justiceassist_frontend
+# #     ports:
+# #       - "3000:80"  # Access app at http://localhost:3000
+# #     depends_on:
+# #       - backend
+
+# #   # --- Backend API (Flask + Gunicorn) ---
+# #   backend:
+# #     build:
+# #       context: ./backend/justiceassist
+# #       dockerfile: Dockerfile
+# #     container_name: justiceassist_backend
+# #     # Using Gunicorn for production performance
+# #     command: gunicorn -w 3 -b 0.0.0.0:5000 run:app --timeout 120
+# #     volumes:
+# #       - ./backend/justiceassist/uploads:/app/uploads     # Persist uploads
+# #       - ./backend/justiceassist/instance:/app/instance   # Persist SQLite DB
+# #     ports:
+# #       - "5000:5000"
+# #     environment:
+# #       # OVERRIDE local .env values for Docker networking:
+# #       - CELERY_BROKER_URL=redis://redis:6379/0
+# #       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+# #       - DATABASE_URL=sqlite:////app/instance/dev.db
+# #       - FLASK_ENV=production
+# #     # Load other keys (API keys) from your file
+# #     env_file:
+# #       - ./backend/justiceassist/.env
+# #     depends_on:
+# #       - redis
+
+# #   # --- Background Worker (RQ) ---
+# #   worker:
+# #     build:
+# #       context: ./backend/justiceassist
+# #       dockerfile: Dockerfile
+# #     container_name: justiceassist_worker
+# #     command: rq worker --url redis://redis:6379/0
+# #     volumes:
+# #       - ./backend/justiceassist/uploads:/app/uploads
+# #       - ./backend/justiceassist/instance:/app/instance
+# #     environment:
+# #       - CELERY_BROKER_URL=redis://redis:6379/0
+# #       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+# #       - DATABASE_URL=sqlite:////app/instance/dev.db
+# #     env_file:
+# #       - ./backend/justiceassist/.env
+# #     depends_on:
+# #       - redis
+
+# #   # --- Redis (Database for Queue) ---
+# #   redis:
+# #     image: redis:alpine
+# #     container_name: justiceassist_redis
+# #     ports:
+# #       - "6379:6379"
+
+# version: '3.8'
+
+# services:
+#   # --- Frontend Service ---
+#   frontend:
+#     # REPLACE 'YOUR_DOCKERHUB_USERNAME' below
+#     image: suyashawari/justiceassist-frontend:latest
+#     container_name: justiceassist_frontend
+#     ports:
+#       - "80:80"  # Exposed on standard HTTP port
+#     depends_on:
+#       - backend
+#     restart: always
+
+#   # --- Backend API Service ---
+#   backend:
+#     # REPLACE 'YOUR_DOCKERHUB_USERNAME' below
+#     image: suyashawari/justiceassist-backend:latest
+#     container_name: justiceassist_backend
+#     # Run Gunicorn for production performance
+#     command: gunicorn -w 3 -b 0.0.0.0:5000 run:app --timeout 120
+#     volumes:
+#       # Data persistence only (Code is inside the image)
+#       - ./uploads:/app/uploads
+#       - ./instance:/app/instance
+#     ports:
+#       - "5000:5000"
+#     environment:
+#       - CELERY_BROKER_URL=redis://redis:6379/0
+#       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+#       - DATABASE_URL=sqlite:////app/instance/dev.db
+#       - FLASK_ENV=production
+#     env_file:
+#       - .env
+#     depends_on:
+#       - redis
+#     restart: always
+
+#   # --- Background Worker Service ---
+#   worker:
+#     # REPLACE 'YOUR_DOCKERHUB_USERNAME' below
+#     # (This is usually the same image as backend, but we tagged it separately)
+#     image: suyashawari/justiceassist-worker:latest
+#     container_name: justiceassist_worker
+#     command: rq worker --url redis://redis:6379/0
+#     volumes:
+#       # Must match backend volumes to access the same files/DB
+#       - ./uploads:/app/uploads
+#       - ./instance:/app/instance
+#     environment:
+#       - CELERY_BROKER_URL=redis://redis:6379/0
+#       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+#       - DATABASE_URL=sqlite:////app/instance/dev.db
+#     env_file:
+#       - .env
+#     depends_on:
+#       - redis
+#     restart: always
+
+#   # --- Redis Service ---
+#   redis:
+#     image: redis:alpine
+#     container_name: justiceassist_redis
+#     ports:
+#       - "6379:6379"
+#     restart: always
+
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend/JusticeAssist
+      dockerfile: Dockerfile
+    container_name: justiceassist_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
+
+  backend:
+    build:
+      context: ./backend/justiceassist
+      dockerfile: Dockerfile
+    container_name: justiceassist_backend
+    command: gunicorn -w 3 -b 0.0.0.0:5000 run:app --timeout 120
+    volumes:
+      - ./uploads:/app/uploads
+      - ./instance:/app/instance
+    ports:
+      - "5000:5000"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=sqlite:////app/instance/dev.db
+      - FLASK_ENV=production
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: always
+
+  worker:
+    build:
+      context: ./backend/justiceassist
+      dockerfile: Dockerfile
+    container_name: justiceassist_worker
+    command: rq worker --url redis://redis:6379/0
+    volumes:
+      - ./uploads:/app/uploads
+      - ./instance:/app/instance
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=sqlite:////app/instance/dev.db
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: always
+
+  redis:
+    image: redis:alpine
+    container_name: justiceassist_redis
+    ports:
+      - "6379:6379"
+    restart: always

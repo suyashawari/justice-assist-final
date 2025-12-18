@@ -1,0 +1,2400 @@
+justiceassist/
+├── agent_runs.txt
+├── app/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── admin_routes.py
+│   │   ├── ai_routes.py
+│   │   ├── auth_routes.py
+│   │   ├── dashboard_route.py
+│   │   ├── main_routes.py
+│   │   └── report_routes.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── models.py
+│   ├── tasks.py
+│   └── utils/
+│       ├── __init__.py
+│       ├── classifier.py
+│       ├── decorators.py
+│       ├── file_metadata_extractor.py
+│       ├── gemini_agent.py
+│       ├── gemini_helper.py
+│       ├── legal_references.py
+│       ├── multilingual.py
+│       ├── pdf_tools.py
+│       ├── refine.py
+│       ├── suspect_utils.py
+│       └── translate_utils.py
+├── celery_worker.py
+├── combine.js
+├── Dockerfile
+├── dump.rdb
+├── maintenance.flag
+├── manual_test.py
+├── README.md
+├── requirements.txt
+├── run.py
+
+
+
+
+==================== Dockerfile ====================
+
+# Use Python 3.9 Slim to save space
+FROM python:3.9-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install System Dependencies (Tesseract OCR is required by your code)
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    libtesseract-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application
+COPY . .
+
+# Expose the Flask port
+EXPOSE 5000
+
+# Command to run the server
+CMD ["python", "run.py"]
+
+
+
+
+==================== agent_runs.txt ====================
+
+
+
+
+
+
+==================== app/api/__init__.py ====================
+
+from app.api.main_routes import main
+from app.api.report_routes import report
+from dotenv import load_dotenv
+load_dotenv()
+
+
+
+
+==================== app/api/admin_routes.py ====================
+
+from flask import Blueprint, jsonify, request
+from app.models.models import Report, User
+from app.utils.decorators import admin_required
+from app.models import db
+from sqlalchemy import func
+from datetime import datetime, timedelta
+import traceback
+import os
+admin_bp = Blueprint("admin", __name__)
+MAINTENANCE_FLAG_FILE = 'maintenance.flag'
+def _read_maintenance_status():
+    if os.path.exists(MAINTENANCE_FLAG_FILE):
+        with open(MAINTENANCE_FLAG_FILE, 'r') as f:
+            status = f.read().strip()
+            return status == 'True'
+    return False
+def _write_maintenance_status(status: bool):
+    with open(MAINTENANCE_FLAG_FILE, 'w') as f:
+        f.write(str(status))
+mock_settings_db = {
+    "maintenance_mode": _read_maintenance_status(),
+    "api_keys": {
+        "openai": "sk-...",
+        "google_gemini": "AIza...",
+        "openrouter": "sk-or-v1..."
+    },
+    "report_categories": [
+        "Online Financial Fraud",
+        "Cyber Harassment",
+        "Cyber Crime Against Women",
+        "Hacking/Unauthorized Access",
+        "Cryptocurrency Scam"
+    ]
+}
+@admin_bp.route("/admin/all-reports", methods=["GET"])
+@admin_required()
+def get_all_reports():
+    try:
+        reports = Report.query.order_by(Report.created_at.desc()).all()
+        all_reports_data = [report.to_dict() for report in reports]
+        return jsonify({
+            "status": "success",
+            "total_reports": len(all_reports_data),
+            "reports": all_reports_data
+        }), 200
+    except Exception as e:
+        print(f"Error in /admin/all-reports: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+@admin_bp.route("/admin/report-analytics", methods=["GET"])
+@admin_required()
+def get_report_analytics():
+    try:
+        period = request.args.get('period', '7d')
+        today = datetime.utcnow().date()
+        if period == 'today':
+            start_date = today
+        elif period == '30d':
+            start_date = today - timedelta(days=29)
+        elif period == 'this_month':
+            start_date = today.replace(day=1)
+        else:
+            start_date = today - timedelta(days=6)
+        end_date = today + timedelta(days=1)
+        date_labels = []
+        current_date = start_date
+        while current_date < end_date:
+            date_labels.append(current_date)
+            current_date += timedelta(days=1)
+        formatted_labels = [d.strftime('%b %d') for d in date_labels]
+        total_reports_in_period = db.session.query(Report).filter(
+            Report.created_at >= start_date,
+            Report.created_at < end_date
+        ).count()
+        if total_reports_in_period == 0:
+            return jsonify({"labels": formatted_labels, "datasets": []})
+        top_users_query = db.session.query(
+            User.username,
+            func.count(Report.id).label('report_count')
+        ).join(Report, Report.user_id == User.id).filter(
+            Report.created_at >= start_date,
+            Report.created_at < end_date
+        ).group_by(User.username).order_by(
+            func.count(Report.id).desc()
+        ).limit(3).all()
+        top_user_usernames = [user.username for user in top_users_query]
+        daily_counts_query = db.session.query(
+            User.username,
+            func.date(Report.created_at).label('report_day'),
+            func.count(Report.id).label('daily_count')
+        ).join(Report, Report.user_id == User.id).filter(
+            User.username.in_(top_user_usernames),
+            Report.created_at >= start_date,
+            Report.created_at < end_date
+        ).group_by(User.username, func.date(Report.created_at)).all()
+        user_data = {username: {label.strftime('%Y-%m-%d'): 0 for label in date_labels} for username in top_user_usernames}
+        for row in daily_counts_query:
+            if row.username in user_data:
+                if row.report_day:
+                    user_data[row.username][row.report_day] = row.daily_count
+        datasets = []
+        colors = [
+            {'border': 'rgba(63, 114, 175, 1)', 'bg': 'rgba(63, 114, 175, 0.3)'},
+            {'border': 'rgba(40, 167, 69, 1)', 'bg': 'rgba(40, 167, 69, 0.3)'},
+            {'border': 'rgba(253, 126, 20, 1)', 'bg': 'rgba(253, 126, 20, 0.3)'}
+        ]
+        for i, username in enumerate(top_user_usernames):
+            color_pair = colors[i % len(colors)]
+            datasets.append({
+                "label": username,
+                "data": list(user_data[username].values()),
+                "borderColor": color_pair['border'],
+                "backgroundColor": color_pair['bg'],
+                "fill": True,
+                "tension": 0.4
+            })
+        return jsonify({"labels": formatted_labels, "datasets": datasets})
+    except Exception as e:
+        print(f"Error in /admin/report-analytics: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": "An internal server error occurred while generating analytics."}), 500
+@admin_bp.route("/admin/settings", methods=["GET"])
+@admin_required()
+def get_settings():
+    mock_settings_db['maintenance_mode'] = _read_maintenance_status()
+    return jsonify(mock_settings_db)
+def prepend_api_key_to_env(env_var_name, new_key):
+    if not new_key:
+        return
+    env_path = '.env'
+    if not os.path.exists(env_path):
+        print(f"Warning: .env file not found at {os.path.abspath(env_path)}")
+        return
+    with open(env_path, 'r') as f:
+        lines = f.readlines()
+    found = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith(env_var_name + "="):
+            parts = line.strip().split('=', 1)
+            current_values = parts[1] if len(parts) > 1 else ""
+            if current_values:
+                new_values = f"{new_key},{current_values}"
+            else:
+                new_values = new_key
+            lines[i] = f"{env_var_name}={new_values}\n"
+            found = True
+            break
+    if not found:
+        lines.append(f"\n{env_var_name}={new_key}\n")
+    with open(env_path, 'w') as f:
+        f.writelines(lines)
+@admin_bp.route("/admin/settings", methods=["POST"])
+@admin_required()
+def update_settings():
+    global mock_settings_db
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+    if 'maintenance_mode' in data:
+        is_maintenance = bool(data['maintenance_mode'])
+        _write_maintenance_status(is_maintenance)
+        mock_settings_db['maintenance_mode'] = is_maintenance
+    if 'api_keys' in data:
+        api_keys = data['api_keys']
+        if api_keys.get('google_gemini') and api_keys['google_gemini'] != mock_settings_db['api_keys']['google_gemini']:
+             prepend_api_key_to_env('GEMINI_API_KEYS', api_keys['google_gemini'])
+        if api_keys.get('openai') and api_keys['openai'] != mock_settings_db['api_keys']['openai']:
+             prepend_api_key_to_env('OPENAI_API_KEY', api_keys['openai'])
+        if api_keys.get('openrouter') and api_keys['openrouter'] != mock_settings_db['api_keys']['openrouter']:
+             prepend_api_key_to_env('OPENROUTER_API_KEY', api_keys['openrouter'])
+        mock_settings_db['api_keys'].update(api_keys)
+    if 'report_categories' in data:
+        if isinstance(data['report_categories'], list):
+            mock_settings_db['report_categories'] = [cat for cat in data['report_categories'] if cat.strip()]
+    return jsonify({"message": "Settings updated. Server restart may be needed for API key changes to take effect."})
+@admin_bp.route("/admin/users", methods=["GET"])
+@admin_required()
+def get_all_users():
+    try:
+        users = User.query.all()
+        return jsonify([user.to_dict() for user in users]), 200
+    except Exception as e:
+        print(f"Error in /admin/users: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+@admin_bp.route("/admin/users", methods=["POST"])
+@admin_required()
+def create_admin_user():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'error': 'Username and password are required'}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'User already exists'}), 400
+    new_admin = User(username=username, role='admin')
+    new_admin.set_password(password)
+    db.session.add(new_admin)
+    db.session.commit()
+    return jsonify({'message': f"Admin user '{username}' created successfully.", "user": new_admin.to_dict()}), 201
+@admin_bp.route("/admin/users/<int:user_id>", methods=["DELETE"])
+@admin_required()
+def delete_user(user_id):
+    try:
+        user_to_delete = User.query.get(user_id)
+        if not user_to_delete:
+            return jsonify({"error": "User not found"}), 404
+        db.session.delete(user_to_delete)
+        db.session.commit()
+        return jsonify({"message": f"User with ID {user_id} has been deleted."}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting user {user_id}: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+
+
+==================== app/api/ai_routes.py ====================
+
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+import os
+import requests
+from dotenv import load_dotenv
+from app.models import db
+from app.models.models import Report
+from werkzeug.utils import secure_filename
+from app.utils.suspect_utils import analyze_evidence
+load_dotenv()
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+GEMINI_API_KEYS = [key.strip() for key in os.getenv("GEMINI_API_KEYS", "").split(",") if key.strip()]
+ai = Blueprint('ai', __name__)
+UPLOAD_FOLDER = "uploads"
+@ai.route('/get-guidance', methods=['POST'])
+@jwt_required()
+def get_guidance():
+    data = request.get_json()
+    user_query = data.get("query", "")
+    if not user_query:
+        return jsonify({"status": "error", "error": "Query is required"}), 400
+    prompt = (
+        "You are an expert Indian cybercrime legal assistant. "
+        "Based on the following user query, provide clear, concise, and actionable guidance. "
+        "Explain the type of cybercrime, immediate steps the user should take, "
+        "what evidence to collect, and which sections of Indian law might apply. "
+        "Keep the tone helpful and reassuring.\n\n"
+        "make it in 3 to 4 lines short and simple words and no table or bullet points just plain text\n\n"
+        f"User Query: \"{user_query}\""
+    )
+    if not GEMINI_API_KEYS:
+        print("ERROR: GEMINI_API_KEYS not found in .env file.")
+        return jsonify({
+            "status": "error",
+            "error": "AI service is not configured correctly on the server."
+        }), 500
+    try:
+        api_key = GEMINI_API_KEYS[0]
+        full_url = f"{GEMINI_API_URL}?key={api_key}"
+        headers = {
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }]
+        }
+        response = requests.post(full_url, headers=headers, json=payload, timeout=90)
+        response.raise_for_status()
+        response_data = response.json()
+        guidance_text = response_data['candidates'][0]['content']['parts'][0]['text']
+        return jsonify({
+            "status": "success",
+            "provider": "Google Gemini",
+            "guidance": guidance_text
+        }), 200
+    except requests.exceptions.RequestException as e:
+        print(f"Gemini API request failed: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+             if e.response.status_code in [401, 403, 429]:
+                return jsonify({"status": "error", "error": "AI service authentication failed. Check server API key."}), 500
+        return jsonify({
+            "status": "error",
+            "error": "The AI guidance service failed to connect. Please try again later."
+        }), 500
+    except Exception as e:
+        print(f"An error occurred while processing the Gemini response: {e}")
+        return jsonify({
+            "status": "error",
+            "error": "An unexpected error occurred with the AI guidance service."
+        }), 500
+@ai.route('/guess-suspect', methods=['POST'])
+@jwt_required()
+def guess_suspect():
+    user_id = get_jwt_identity()
+    data = request.form.to_dict() or {}
+    report_id = data.get("report_id")
+    evidence_text = data.get("evidence_text", "")
+    evidence_file = request.files.get("evidence_file")
+    file_path = None
+    if report_id:
+        report = Report.query.filter_by(id=report_id, user_id=user_id).first()
+        if not report:
+            return jsonify({"status": "error", "error": "Report not found"}), 404
+        evidence_text = report.description
+        file_path = report.evidence_file
+    elif evidence_file:
+        os.makedirs("uploads", exist_ok=True)
+        filename = secure_filename(evidence_file.filename)
+        file_path = os.path.join("uploads", filename)
+        evidence_file.save(file_path)
+    if not evidence_text and not file_path:
+        return jsonify({
+            "status": "error",
+            "error": "Either text or file evidence is required"
+        }), 400
+    result = analyze_evidence(text=evidence_text, file_path=file_path)
+    dashboard_view = {
+        "suspect_profile": result.get("suspect_profile") or "Unknown",
+        "summary": result.get("summary", ""),
+        "artifacts": {
+            "emails": result.get("artifacts", {}).get("emails", []),
+            "urls": result.get("artifacts", {}).get("urls", []),
+            "ip_addresses": result.get("artifacts", {}).get("ips", []),
+        }
+    }
+    detailed_view = {
+        "summary": result.get("summary", ""),
+        "suspect_profile": result.get("suspect_profile") or "Unknown",
+        "clues": result.get("clues", []),
+        "artifacts": result.get("artifacts", {}),
+        "tool_results": {
+            "whois": result.get("whois", {}),
+            "dns": result.get("dns", {}),
+            "ip_info": result.get("ip_info", {}),
+            "url_analysis": result.get("url_analysis", {}),
+            "file_metadata": result.get("file_metadata", {})
+        }
+    }
+    return jsonify({
+        "status": "success",
+        "dashboard": dashboard_view,
+        "detailed": detailed_view
+    }), 200
+
+
+
+
+==================== app/api/auth_routes.py ====================
+
+from flask import Blueprint, request, jsonify
+from app.models import db
+from app.models.models import User
+from flask_jwt_extended import create_access_token
+from datetime import timedelta
+auth = Blueprint('auth', __name__)
+@auth.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'error': 'Username and password are required'}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'User already exists'}), 400
+    new_user = User(username=username)
+    new_user.set_password(password)
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': 'User registered successfully'}), 201
+@auth.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    role_from_request = data.get('role')
+    user = User.query.filter_by(username=username).first()
+    if user and user.check_password(password):
+        if role_from_request == 'admin' and user.role != 'admin':
+            return jsonify({'error': 'Insufficient permissions to log in as admin'}), 401
+        additional_claims = {"role": user.role}
+        access_token = create_access_token(
+            identity=str(user.id),
+            expires_delta=timedelta(hours=1),
+            additional_claims=additional_claims
+        )
+        return jsonify({'access_token': access_token}), 200
+    return jsonify({'error': 'Invalid credentials or insufficient permissions'}), 401
+
+
+
+
+==================== app/api/dashboard_route.py ====================
+
+from flask import Blueprint, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.models.models import Report
+dashboard = Blueprint("dashboard", __name__)
+@dashboard.route("/dashboard", methods=["GET"])
+@jwt_required()
+def get_dashboard():
+    user_id = get_jwt_identity()
+    reports = Report.query.filter_by(user_id=user_id).order_by(Report.created_at.desc()).all()
+    dashboard_reports = []
+    category_counts = {}
+    for r in reports:
+        forensic_summary = r.get_json_field("forensic_summary")
+        suspect = forensic_summary.get("suspect_profile") if forensic_summary else "Unknown"
+        summary = forensic_summary.get("summary") if forensic_summary else ""
+        dashboard_reports.append({
+            "report_id": r.id,
+            "description": r.description,
+            "incident_date": r.incident_date,
+            "status": r.status,
+            "suspect_guess": suspect,
+            "summary": summary,
+            "evidence_file": r.evidence_file
+        })
+        cat = suspect or "Unknown"
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+    return jsonify({
+        "status": "success",
+        "total_reports": len(reports),
+        "category_counts": category_counts,
+        "reports": dashboard_reports
+    }), 200
+
+
+
+
+==================== app/api/main_routes.py ====================
+
+import os
+from flask import Blueprint, request, jsonify, current_app
+from app.models.models import Report
+from app.models import db
+from app.utils import extract_text
+from app.utils.refine import refine_extracted_text
+from datetime import datetime
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from redis import Redis
+from rq import Queue
+from app.tasks import analyze_report_task
+from app.api.admin_routes import mock_settings_db
+main = Blueprint('main', __name__)
+redis_url = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+try:
+    redis_conn = Redis.from_url(redis_url)
+    q = Queue(connection=redis_conn)
+    redis_conn.ping()
+    print("✅ Successfully connected to Redis for RQ.")
+except Exception as e:
+    print(f"❌ Could not connect to Redis for RQ: {e}")
+    q = None
+@main.route('/')
+def index():
+    return jsonify({"message": "JusticeAssist backend is running."})
+@main.route('/protected')
+@jwt_required()
+def protected():
+    return jsonify(message="You are authenticated")
+@main.route('/extract-text', methods=['POST'])
+def extract_text_route():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Empty file name'}), 400
+    upload_folder = 'uploads'
+    os.makedirs(upload_folder, exist_ok=True)
+    save_path = os.path.join(upload_folder, file.filename)
+    file.save(save_path)
+    text = extract_text(save_path)
+    refined = refine_extracted_text(text)
+    return jsonify({
+        'extracted_text': text,
+        'refined_evidence': refined
+    })
+@main.route("/submit-report", methods=["POST"])
+@jwt_required()
+def submit_report():
+    try:
+        data = request.form
+        user_id = get_jwt_identity()
+        if not data.get('description'):
+            return jsonify({"error": "Description is a required field"}), 400
+        file_path = None
+        if 'evidence_file' in request.files and request.files['evidence_file'].filename != '':
+            evidence_file = request.files['evidence_file']
+            upload_folder = "uploads/"
+            os.makedirs(upload_folder, exist_ok=True)
+            file_path = os.path.join(upload_folder, evidence_file.filename)
+            evidence_file.save(file_path)
+            print(f"📁 Evidence file saved to: {file_path}")
+        new_report = Report(
+            user_id=user_id,
+            first_name=data.get('first_name'),
+            last_name=data.get('last_name'),
+            address=data.get('address'),
+            email=data.get('email'),
+            phone=data.get('phone'),
+            state=data.get('state'),
+            city=data.get('city'),
+            complaint_category=data.get('complaint_category'),
+            incident_date=data.get('incident_date'),
+            delay_in_reporting=data.get('delay_in_reporting'),
+            platform=data.get('platform'),
+            description=data.get('description'),
+            evidence_file=file_path,
+            status='submitted',
+            created_at=datetime.utcnow()
+        )
+        db.session.add(new_report)
+        db.session.commit()
+        report_id = new_report.id
+        print(f"✅ Report {report_id} saved to DB with 'submitted' status.")
+        if q:
+            q.enqueue(analyze_report_task, report_id)
+            print(f"✅ Task for report {report_id} successfully sent to RQ worker.")
+        else:
+            print("❌ RQ worker not available. Task not dispatched.")
+        return jsonify({
+            "status": "success",
+            "message": "Report submitted and queued for analysis.",
+            "report_id": report_id
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "An internal server error occurred.", "details": str(e)}), 500
+@main.route('/update-report/<int:report_id>', methods=['PUT'])
+@jwt_required()
+def update_report(report_id):
+    current_user_id = get_jwt_identity()
+    data = request.get_json()
+    report = Report.query.filter_by(id=report_id, user_id=current_user_id).first()
+    if not report:
+        return jsonify({"error": "Report not found or access denied"}), 404
+    if 'status' in data:
+        report.status = data['status']
+    if 'description' in data:
+        report.description = data['description']
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Failed to update report", "details": str(e)}), 500
+    return jsonify({"message": "Report updated", "report": report.to_dict()}), 200
+@main.route('/api/maintenance-status', methods=['GET'])
+def get_maintenance_status():
+    is_maintenance = mock_settings_db.get('maintenance_mode', False)
+    return jsonify({"maintenance_mode": is_maintenance})
+
+
+
+
+==================== app/api/report_routes.py ====================
+
+import os
+from flask import Blueprint, request, jsonify, current_app
+from werkzeug.exceptions import BadRequest
+from datetime import datetime
+from redis import Redis
+from rq import Queue
+from app.tasks import analyze_report_task
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+from app.models.models import Report
+report = Blueprint("report", __name__)
+redis_url = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+try:
+    redis_conn = Redis.from_url(redis_url)
+    q = Queue(connection=redis_conn)
+except Exception as e:
+    current_app.logger.error(f"Could not connect to Redis for RQ: {e}")
+    q = None
+@report.route("/submit", methods=["POST"])
+def submit_report():
+    data = request.get_json(silent=True)
+    if not data:
+        raise BadRequest("JSON body required")
+    from app.models import db
+    new_report = Report(
+        title=data.get("title"),
+        description=data.get("description"),
+        status="pending",
+        created_at=datetime.utcnow()
+    )
+    db.session.add(new_report)
+    db.session.commit()
+    report_id = new_report.id
+    if q:
+        q.enqueue(analyze_report_task, report_id)
+    return jsonify({"status": "accepted", "report_id": report_id}), 202
+@report.route("/<int:report_id>/details", methods=["GET"])
+@jwt_required()
+def get_report_details(report_id):
+    current_user_id = get_jwt_identity()
+    claims = get_jwt()
+    user_role = claims.get("role")
+    report = Report.query.get(report_id)
+    if not report:
+        return jsonify({"status": "error", "message": "Report not found"}), 404
+    is_owner = str(report.user_id) == str(current_user_id)
+    is_admin = user_role == "admin"
+    if not is_owner and not is_admin:
+        return jsonify({"status": "error", "message": "Access denied"}), 403
+    analysis_details = report.get_json_field("forensic_details")
+    if report.status != 'analyzed' or not analysis_details:
+        return jsonify({
+            "status": "pending",
+            "message": "Report analysis is not yet complete.",
+            "data": {
+                "submission_details": report.to_dict(),
+                "analysis_details": None
+            }
+        }), 202
+    if "error" in analysis_details:
+        return jsonify({
+            "status": "error",
+            "message": "Analysis details are unavailable for this report.",
+            "data": {
+                "submission_details": report.to_dict(),
+                "analysis_details": analysis_details
+            }
+        }), 404
+    combined_data = {
+        "submission_details": report.to_dict(),
+        "analysis_details": analysis_details
+    }
+    return jsonify({"status": "success", "data": combined_data}), 200
+
+
+
+
+==================== app/models/__init__.py ====================
+
+import os
+from dotenv import load_dotenv
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+from flask_migrate import Migrate
+load_dotenv()
+db = SQLAlchemy()
+jwt = JWTManager()
+migrate = Migrate()
+def create_app():
+    app = Flask(__name__, instance_relative_config=False)
+    CORS(app, supports_credentials=True)
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///dev.db")
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "super-secret-key")
+    db.init_app(app)
+    jwt.init_app(app)
+    migrate.init_app(app, db)
+    from app.api.main_routes import main as main_blueprint
+    from app.api.auth_routes import auth as auth_blueprint
+    from app.api.ai_routes import ai as ai_blueprint
+    from app.api.report_routes import report as report_blueprint
+    from app.api.dashboard_route import dashboard
+    from app.api.admin_routes import admin_bp
+    app.register_blueprint(main_blueprint)
+    app.register_blueprint(auth_blueprint, url_prefix="/auth")
+    app.register_blueprint(report_blueprint, url_prefix="/report")
+    app.register_blueprint(ai_blueprint, url_prefix="/ai")
+    app.register_blueprint(dashboard)
+    app.register_blueprint(admin_bp, url_prefix="/api")
+    return app
+
+
+
+
+==================== app/models/models.py ====================
+
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
+from app.models import db
+import json
+class Report(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    first_name = db.Column(db.String(100), nullable=True)
+    last_name = db.Column(db.String(100), nullable=True)
+    address = db.Column(db.String(200), nullable=True)
+    email = db.Column(db.String(100), nullable=True)
+    phone = db.Column(db.String(20), nullable=True)
+    state = db.Column(db.String(50), nullable=True)
+    city = db.Column(db.String(50), nullable=True)
+    complaint_category = db.Column(db.String(100), nullable=True)
+    incident_date = db.Column(db.String(50), nullable=True)
+    delay_in_reporting = db.Column(db.String(10), nullable=True)
+    platform = db.Column(db.String(100), nullable=True)
+    description = db.Column(db.Text, nullable=False)
+    evidence_file = db.Column(db.String(200), nullable=True)
+    status = db.Column(db.String(50), default='submitted')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    forensic_summary = db.Column(db.Text, nullable=True)
+    forensic_details = db.Column(db.Text, nullable=True)
+    def set_json_field(self, field_name, data):
+        setattr(self, field_name, json.dumps(data))
+    def get_json_field(self, field_name):
+        val = getattr(self, field_name)
+        return json.loads(val) if val else None
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "address": self.address,
+            "email": self.email,
+            "phone": self.phone,
+            "state": self.state,
+            "city": self.city,
+            "complaint_category": self.complaint_category,
+            "incident_date": self.incident_date,
+            "delay_in_reporting": self.delay_in_reporting,
+            "platform": self.platform,
+            "description": self.description,
+            "evidence_file": self.evidence_file,
+            "status": self.status,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
+            "user_id": self.user_id,
+            "forensic_summary": self.get_json_field("forensic_summary"),
+            "forensic_details": self.get_json_field("forensic_details")
+        }
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    role = db.Column(db.String(10), nullable=False, default='user')
+    reports = db.relationship('Report', backref='user', lazy=True)
+    def set_password(self, password):
+        from werkzeug.security import generate_password_hash
+        self.password_hash = generate_password_hash(password)
+    def check_password(self, password):
+        from werkzeug.security import check_password_hash
+        return check_password_hash(self.password_hash, password)
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.username,
+            "role": self.role,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+
+
+
+==================== app/tasks.py ====================
+
+from app.utils.gemini_agent import run_analysis_agent
+from datetime import datetime
+import json
+from app.utils.file_metadata_extractor import extract_rich_metadata
+def analyze_report_task(report_id):
+    try:
+        from app.models import create_app, db
+        from app.models.models import Report
+    except Exception as e:
+        print(f"Import error inside RQ task: {e}")
+        return
+    app = create_app()
+    with app.app_context():
+        report = None
+        try:
+            report = Report.query.get(report_id)
+            if not report:
+                print(f"Report ID {report_id} not found.")
+                return
+            print(f"Handing off report {report_id} to the AI agent...")
+            report.status = 'analyzing'
+            db.session.commit()
+            form_data_json = json.dumps(report.to_dict(), indent=2)
+            file_metadata = None
+            if report.evidence_file:
+                print(f"Running local metadata extraction for: {report.evidence_file}")
+                file_metadata = extract_rich_metadata(report.evidence_file)
+            report_context = (
+                f"## User Submitted Form Data ##\n{form_data_json}\n\n"
+                f"## Locally Extracted File Metadata ##\n{json.dumps(file_metadata, indent=2) if file_metadata else 'No file provided or metadata found.'}"
+            )
+            raw_findings = run_analysis_agent(
+                text_to_analyze=report_context,
+                report_id=report.id,
+                file_path=report.evidence_file
+            )
+            if "error" in raw_findings:
+                print(f"AI agent failed for report {report_id}: {raw_findings['error']}")
+                report.status = 'failed'
+                report.set_json_field("forensic_details", raw_findings)
+                db.session.commit()
+                return
+            indicators_of_compromise = {}
+            for tool_run in reversed(raw_findings.get("tool_results", [])):
+                if tool_run.get("tool") == "extract_artifacts":
+                    indicators_of_compromise = tool_run.get("output", {})
+                    break
+            final_summary_text = raw_findings.get("final_summary_text", "Analysis complete.")
+            incident_type = report.complaint_category or "Unknown"
+            suspect_profile = "A suspect involved in online malicious activities."
+            if "crypto" in incident_type.lower():
+                suspect_profile = "Fraudster operating a fake crypto investment scheme."
+            elif "phishing" in incident_type.lower() or "email" in incident_type.lower():
+                suspect_profile = "Scammer using deceptive emails/websites to steal credentials."
+            executive_summary = {
+                "summary": final_summary_text.strip(),
+                "suspect_profile": suspect_profile,
+                "incident_type": incident_type
+            }
+            analysis_details = {
+                "executive_summary": executive_summary,
+                "indicators_of_compromise": indicators_of_compromise,
+                "tool_investigation_results": raw_findings.get("tool_results", []),
+                "analysis_timestamp": datetime.utcnow().isoformat(),
+                "report_id": report_id
+            }
+            dashboard_summary = {
+                "summary": executive_summary["summary"],
+                "suspect_profile": executive_summary["suspect_profile"]
+            }
+            report.set_json_field("forensic_summary", dashboard_summary)
+            report.set_json_field("forensic_details", analysis_details)
+            report.status = "analyzed"
+            db.session.commit()
+            print(f"AI agent finished for report {report_id}. Detailed results structured and saved successfully.")
+        except Exception as e:
+            if db.session.is_active:
+                db.session.rollback()
+            print(f"Exception during AI agent task for report {report_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            if report:
+                report.status = 'failed'
+                db.session.commit()
+
+
+
+
+==================== app/utils/__init__.py ====================
+
+from PIL import Image
+import pytesseract
+import fitz
+import os
+import platform
+import shutil
+def configure_tesseract():
+    system = platform.system()
+    tesseract_path = None
+    if shutil.which("tesseract"):
+        tesseract_path = shutil.which("tesseract")
+    else:
+        if system == "Windows":
+            windows_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+            if os.path.exists(windows_path):
+                tesseract_path = windows_path
+        elif system == "Darwin":
+            mac_paths = [
+                "/opt/homebrew/bin/tesseract",
+                "/usr/local/bin/tesseract"
+            ]
+            for path in mac_paths:
+                if os.path.exists(path):
+                    tesseract_path = path
+                    break
+    if tesseract_path:
+        print(f"✅ Tesseract executable found at: {tesseract_path}")
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    else:
+        print("❌ WARNING: Tesseract executable not found.")
+        print("Please do the following:")
+        print("1. Install Tesseract-OCR on your system. You can find installers here: https://github.com/UB-Mannheim/tesseract/wiki")
+        print("2. Ensure the Tesseract installation directory is in your system's PATH environment variable.")
+        print("   (The OCR feature for image and scanned PDF uploads will not work until this is resolved).")
+configure_tesseract()
+def extract_text(file_path):
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == '.pdf':
+        text = extract_text_from_pdf(file_path)
+        if not text.strip():
+            text = ocr_pdf(file_path)
+        return text
+    elif ext in ['.jpg', '.jpeg', '.png']:
+        return extract_text_from_image(file_path)
+    else:
+        return "Unsupported file type."
+def extract_text_from_pdf(path):
+    text = ""
+    try:
+        with fitz.open(path) as doc:
+            for page in doc:
+                text += page.get_text()
+    except Exception as e:
+        print(f"Error extracting text from PDF with PyMuPDF: {e}")
+    return text
+def ocr_pdf(path):
+    text = ""
+    try:
+        with fitz.open(path) as doc:
+            for page_num in range(len(doc)):
+                pix = doc[page_num].get_pixmap()
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                text += pytesseract.image_to_string(img)
+    except Exception as e:
+        print(f"Error performing OCR on PDF: {e}")
+    return text
+def extract_text_from_image(path):
+    try:
+        return pytesseract.image_to_string(Image.open(path))
+    except Exception as e:
+        print(f"Error extracting text from image: {e}")
+        return ""
+
+
+
+
+==================== app/utils/classifier.py ====================
+
+from transformers import pipeline
+classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+CATEGORIES = [
+    "Phishing",
+    "Banking Fraud",
+    "Social Media Hacking",
+    "Cyberbullying",
+    "Identity Theft",
+    "Other"
+]
+def classify_text(text: str) -> dict:
+    if not text or not isinstance(text, str):
+        return {
+            "category": "Unknown",
+            "confidence": 0.0,
+            "explanation": "No valid evidence text provided."
+        }
+    result = classifier(text, candidate_labels=CATEGORIES)
+    top_category = result["labels"][0]
+    top_score = float(result["scores"][0])
+    return {
+        "category": top_category,
+        "confidence": round(top_score, 2),
+        "explanation": f"Classified as '{top_category}' with confidence {round(top_score,2)}."
+    }
+
+
+
+
+==================== app/utils/decorators.py ====================
+
+from functools import wraps
+from flask import jsonify
+from flask_jwt_extended import verify_jwt_in_request, get_jwt
+def admin_required():
+    def wrapper(fn):
+        @wraps(fn)
+        def decorator(*args, **kwargs):
+            verify_jwt_in_request()
+            claims = get_jwt()
+            if claims.get("role") == "admin":
+                return fn(*args, **kwargs)
+            else:
+                return jsonify(msg="Admins only! Access forbidden."), 403
+        return decorator
+    return wrapper
+
+
+
+
+==================== app/utils/file_metadata_extractor.py ====================
+
+import fitz
+import piexif
+from PIL import Image
+def get_gps_from_exif(exif_dict):
+    gps_info = {}
+    if "GPS" in exif_dict:
+        for tag, value in exif_dict["GPS"].items():
+            tag_name = piexif.GPSIFD.TAGS.get(tag, {}).get("name", tag)
+            gps_info[tag_name] = str(value)
+    return gps_info if gps_info else None
+def extract_rich_metadata(file_path):
+    metadata = {
+        "file_path": file_path,
+        "metadata": {},
+        "annotations": [],
+        "error": None
+    }
+    try:
+        if file_path.lower().endswith(('.jpg', '.jpeg', '.tiff', '.png')):
+            img = Image.open(file_path)
+            metadata["metadata"]["format"] = img.format
+            metadata["metadata"]["mode"] = img.mode
+            metadata["metadata"]["size"] = f"{img.width}x{img.height}"
+            if "exif" in img.info:
+                exif_dict = piexif.load(img.info["exif"])
+                general_exif = {}
+                for ifd in ("0th", "Exif", "1st"):
+                    if ifd in exif_dict:
+                        for tag, value in exif_dict[ifd].items():
+                            tag_name = piexif.TAGS.get(ifd, {}).get(tag, {}).get("name", tag)
+                            if isinstance(value, bytes) and len(value) > 50:
+                                general_exif[tag_name] = str(value[:50]) + "..."
+                            else:
+                                general_exif[tag_name] = str(value)
+                metadata["metadata"]["exif"] = general_exif
+                gps_data = get_gps_from_exif(exif_dict)
+                if gps_data:
+                    metadata["metadata"]["gps"] = gps_data
+        elif file_path.lower().endswith('.pdf'):
+            doc = fitz.open(file_path)
+            metadata["metadata"] = doc.metadata
+            for page_num, page in enumerate(doc):
+                annots = page.annots()
+                if annots:
+                    for annot in annots:
+                        metadata["annotations"].append({
+                            "page": page_num + 1,
+                            "type": annot.type[1],
+                            "info": annot.info
+                        })
+            doc.close()
+    except Exception as e:
+        metadata["error"] = f"Failed to extract metadata: {str(e)}"
+    return metadata
+
+
+
+
+==================== app/utils/gemini_agent.py ====================
+
+import os
+from dotenv import load_dotenv
+load_dotenv()
+import json
+import requests
+import time
+import random
+import re
+import traceback
+import base64
+import logging
+from datetime import datetime
+from app.utils.suspect_utils import TOOL_REGISTRY
+logger = logging.getLogger('AgentLogger')
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    handler = logging.FileHandler('agent_runs.log')
+    formatter = logging.Formatter('%(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+GEMINI_API_KEYS = [key.strip() for key in os.getenv("GEMINI_API_KEYS", "").split(",") if key.strip()]
+if not GEMINI_API_KEYS and os.getenv("GOOGLE_API_KEY"):
+    GEMINI_API_KEYS = [os.getenv("GOOGLE_API_KEY")]
+API_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+MODEL = "gemini-flash-latest"
+MAX_TURNS = 10
+MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024
+def clean_and_parse_json(text: str):
+    if not text: return {}
+    text = text.strip()
+    if text.startswith("```json"):
+        text = text.lstrip("```json").rstrip("```")
+    elif text.startswith("```"):
+        text = text.lstrip("```").rstrip("```")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(0))
+            except:
+                pass
+    return {"purpose": "error", "error_message": "AI returned malformed JSON."}
+def get_file_mime_type(file_path):
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext in ['.jpg', '.jpeg']:
+        return 'image/jpeg'
+    if ext == '.png':
+        return 'image/png'
+    if ext == '.pdf':
+        return 'application/pdf'
+    return None
+def chat_with_gemini(messages, current_key_index, temperature: float = 0.2, timeout: int = 180, max_retries: int = 3):
+    if not GEMINI_API_KEYS:
+        error_msg = "❌ [AGENT ERROR] No Gemini API keys configured."
+        logger.error(error_msg)
+        print(error_msg)
+        return {"purpose": "error", "error_message": "AI service is not configured."}, current_key_index
+    local_key_index = current_key_index
+    for attempt in range(max_retries):
+        current_key = GEMINI_API_KEYS[local_key_index % len(GEMINI_API_KEYS)]
+        url = f"{API_URL_BASE}?key={current_key}"
+        system_instruction = None
+        content_for_api = []
+        for m in messages:
+            if m['role'] == 'system':
+                system_instruction = m['content']
+            else:
+                role = 'model' if m['role'] in ['assistant', 'model'] else 'user'
+                if 'parts' in m:
+                    content_for_api.append({'role': role, 'parts': m['parts']})
+                else:
+                    content_for_api.append({'role': role, 'parts': [{'text': m['content']}]})
+        payload = {
+            "contents": content_for_api,
+            "system_instruction": {'parts': [{'text': system_instruction}]},
+            "generation_config": {
+                "temperature": temperature,
+            }
+        }
+        try:
+            log_payload = json.dumps(payload, indent=2)
+            logger.info(f"REQUEST to Gemini:\n{log_payload}")
+            r = requests.post(url, json=payload, timeout=timeout)
+            if 200 <= r.status_code < 300:
+                response_data = r.json()
+                log_response = json.dumps(response_data, indent=2)
+                logger.info(f"RESPONSE from Gemini:\n{log_response}")
+                ai_response_text = response_data['candidates'][0]['content']['parts'][0]['text']
+                return clean_and_parse_json(ai_response_text), local_key_index
+            error_details = f"Status: {r.status_code}, Response: {r.text}"
+            logger.error(f"[API ERROR] {error_details}")
+            if r.status_code in [401, 403, 429]:
+                print(f"🚫 Key failed with status {r.status_code}. Rotating key.")
+                local_key_index += 1
+                time.sleep(1 + random.random())
+                continue
+            if 500 <= r.status_code < 600:
+                print(f"⚠️ Server error {r.status_code}. Retrying...")
+                time.sleep(1.5 ** attempt)
+                continue
+            print(f"❌ Unhandled status {r.status_code}. Failing. Response: {r.text}")
+            return {"purpose": "error", "error_message": f"API failed with status {r.status_code}"}, local_key_index
+        except requests.exceptions.RequestException as e:
+            error_message = f"Network error: {e}. Retrying..."
+            logger.error(f"[AGENT ERROR] {error_message}")
+            print(error_message)
+            time.sleep(1.5 ** attempt)
+        except Exception as e:
+            error_message = f"General error: {e}. Failing."
+            logger.error(f"[AGENT ERROR] {error_message}")
+            print(error_message)
+            return {"purpose": "error", "error_message": str(e)}, local_key_index
+    final_error_msg = "All API keys failed or retries exhausted."
+    logger.error(f"[AGENT ERROR] {final_error_msg}")
+    return {"purpose": "error", "error_message": final_error_msg}, local_key_index
+def run_analysis_agent(text_to_analyze: str, report_id: int, file_path: str = None):
+    logger.info("\n\n" + "="*20 + f" REPORT ID: {report_id} " + "="*20)
+    logger.info(f"START TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    current_key_index = 0
+    findings = {
+        "tool_results": [],
+        "final_summary_text": "Investigation Inconclusive: Agent failed to return a final summary.",
+        "errors": []
+    }
+    SYSTEM_PROMPT = (
+        "You are an autonomous Cyber Investigator. Your goal is to provide a comprehensive, evidence-backed summary of a cybercrime incident. "
+        "You will receive the user's report form data, pre-extracted file metadata, and potentially the evidence file itself. "
+        "Your responses MUST be a single, valid JSON object with the following structure:\n"
+        "1. **`purpose`**: [\"inspect_urls\", \"inspect_ips\", \"web_search\", \"summarize_findings\", \"stop_investigation\", \"error\"]\n"
+        "2. **`parameters`**: {args for the tool, e.g., {\"urls\": [...]}} (omit if summarizing/stopping)\n"
+        "3. **`final_summary`**: \"Your comprehensive final analysis text.\" (only include if purpose is \"summarize_findings\")\n\n"
+        "RULES:\n"
+        "- Your first step is to analyze all the provided information (form, metadata, file) and then decide which tool to use next.\n"
+        "- DO NOT call a tool named `extract_artifacts`. That has been done for you.\n"
+        "- Base your decisions ONLY on the evidence and tool results provided in the history.\n"
+        "- Do not call tools with empty data (e.g., inspect_urls with an empty list).\n"
+        f"- Maximum {MAX_TURNS} turns allowed. Use `summarize_findings` to stop the investigation."
+    )
+    initial_user_content = [
+        {'text': f"BEGIN ANALYSIS. Full Report Context:\n\n{text_to_analyze}"}
+    ]
+    if file_path and os.path.exists(file_path):
+        file_size = os.path.getsize(file_path)
+        if file_size < MAX_FILE_SIZE_BYTES:
+            print(f"File size ({file_size} bytes) is within limit. Uploading to AI.")
+            mime_type = get_file_mime_type(file_path)
+            if mime_type:
+                try:
+                    with open(file_path, "rb") as f:
+                        file_data = base64.b64encode(f.read()).decode('utf-8')
+                    initial_user_content.append({
+                        'inline_data': {
+                            'mime_type': mime_type,
+                            'data': file_data
+                        }
+                    })
+                except Exception as e:
+                    print(f"Error encoding file for AI: {e}")
+            else:
+                print(f"Unsupported file type for AI upload: {file_path}")
+        else:
+            print(f"File size ({file_size} bytes) exceeds limit. Not uploading file to AI.")
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "parts": initial_user_content}
+    ]
+    start_message = f"Starting Gemini Multimodal Agent for Report ID: {report_id} (Max Turns: {MAX_TURNS})"
+    logger.info("="*len(start_message))
+    logger.info(start_message)
+    logger.info("="*len(start_message))
+    for turn in range(MAX_TURNS):
+        logger.info(f"\n--- Agent Turn {turn + 1} / {MAX_TURNS} ---")
+        print(f"\n--- Agent Turn {turn + 1} / {MAX_TURNS} ---")
+        ai_response_json, new_key_index = chat_with_gemini(messages, current_key_index)
+        current_key_index = new_key_index
+        messages.append({"role": "model", "content": json.dumps(ai_response_json)})
+        purpose = ai_response_json.get("purpose", "error")
+        parameters = ai_response_json.get("parameters", {})
+        logger.info(f"[AGENT LOG] AI decided on purpose: `{purpose}`")
+        if purpose == "summarize_findings":
+            findings["final_summary_text"] = ai_response_json.get("final_summary", "Agent finished with a successful summary.")
+            log_msg = "[AGENT LOG] Final summary received. Investigation complete."
+            logger.info(log_msg)
+            print(log_msg)
+            logger.info(f"END TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info("="*55 + "\n")
+            return findings
+        if purpose == "stop_investigation":
+            findings["final_summary_text"] = "Agent explicitly stopped the investigation due to a dead end."
+            log_msg = "[AGENT LOG] Agent explicitly stopped. Investigation complete."
+            logger.info(log_msg)
+            print(log_msg)
+            logger.info(f"END TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info("="*55 + "\n")
+            return findings
+        if purpose == "error" or purpose not in TOOL_REGISTRY:
+            error_msg = ai_response_json.get("error_message", f"AI returned an unhandled error or unknown purpose: {purpose}")
+            findings["errors"].append(error_msg)
+            log_msg = f"❌ [AGENT ERROR] {error_msg}"
+            logger.error(log_msg)
+            print(log_msg)
+            findings["final_summary_text"] = f"Investigation Halted on Turn {turn + 1} due to error: {error_msg}. Finalizing report with partial findings."
+            logger.info(f"END TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info("="*55 + "\n")
+            return findings
+        if purpose in TOOL_REGISTRY:
+            tool_func = TOOL_REGISTRY[purpose]
+            log_msg = f"[AGENT LOG] ✓ Executing tool: `{purpose}` with args: {list(parameters.keys())}"
+            logger.info(log_msg)
+            print(log_msg)
+            tool_output = None
+            try:
+                tool_output = tool_func(**parameters)
+                findings["tool_results"].append({"tool": purpose, "args": parameters, "output": tool_output})
+                logger.info(f"[TOOL RESULT] Output for {purpose}:\n{json.dumps(tool_output, indent=2)}")
+                messages.append({
+                    "role": "user",
+                    "content": f"TOOL_OUTPUT_FOR_{purpose}: {json.dumps(tool_output)}"
+                })
+            except Exception as e:
+                error_msg = f"Tool execution failed for {purpose}: {str(e)}"
+                findings["errors"].append(error_msg)
+                log_msg = f"❌ [TOOL ERROR] {error_msg}"
+                logger.error(log_msg)
+                print(log_msg)
+                messages.append({
+                    "role": "user",
+                    "content": f"TOOL_EXECUTION_ERROR_FOR_{purpose}: {error_msg}"
+                })
+    final_text = f"Investigation stopped: Maximum turns ({MAX_TURNS}) reached without a final summary. Finalizing report with partial findings."
+    findings["final_summary_text"] = final_text
+    log_msg = f"⚠️ [AGENT] Reached maximum turns ({MAX_TURNS})"
+    logger.warning(log_msg)
+    print(log_msg)
+    findings['tool_results'] = findings.get('tool_results', [])
+    logger.info(f"END TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("="*55 + "\n")
+    return findings
+
+
+
+
+==================== app/utils/gemini_helper.py ====================
+
+import google.generativeai as genai
+import os
+from app.utils.classifier import classify_text
+from google.genai import types
+client = None
+try:
+    if os.getenv("GOOGLE_API_KEY"):
+        client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+except Exception as e:
+    print(f"Error initializing Gemini client: {e}")
+def get_guidance(text):
+    if not client:
+        return {"category": "Unknown", "guidance": "Gemini AI service is not configured correctly on the server."}
+    prompt = (
+        "You are an expert Indian cybercrime legal assistant. "
+        "Based on the following user query, provide clear, concise, and actionable guidance. "
+        "Explain the type of cybercrime, immediate steps the user should take, "
+        "what evidence to collect, and which sections of Indian law might apply. "
+        "Keep the tone helpful and reassuring.\n\n"
+        f"User Query: \"{text}\""
+    )
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[prompt],
+        )
+        return {
+            "category": classify_text(text).get("category") if text else "Unknown",
+            "guidance": response.text if response and response.text else "No response"
+        }
+    except Exception as e:
+        print(f"Gemini guidance error: {e}")
+        return {
+            "category": "Unknown",
+            "guidance": f"The AI guidance service failed: {str(e)}"
+        }
+def guess_suspect(text):
+    response = "The dedicated forensic AI agent is running the analysis in the background using advanced tools. Check the Report Details for the full output."
+    return response if response else "No response"
+
+
+
+
+==================== app/utils/legal_references.py ====================
+
+LEGAL_REFERENCES = {
+    "Phishing": [
+        "Section 66C - Identity theft (IT Act, 2000)",
+        "Section 66D - Cheating by personation using computer resources",
+        "Section 420 - Cheating and dishonestly inducing delivery of property (IPC)"
+    ],
+    "Fraud": [
+        "Section 66C - Identity theft (IT Act, 2000)",
+        "Section 66D - Cheating by personation using computer resources",
+        "Section 468 - Forgery for the purpose of cheating (IPC)",
+        "Section 471 - Using forged documents (IPC)"
+    ],
+    "Spoofing": [
+        "Section 66 - Computer-related offences (IT Act, 2000)",
+        "Section 468 - Forgery for purpose of cheating (IPC)"
+    ],
+    "Malware": [
+        "Section 66 - Computer-related offences (IT Act, 2000)",
+        "Section 65 - Tampering with computer source documents (IT Act, 2000)"
+    ],
+    "Other / Unknown": [
+        "General cybercrime provisions under the IT Act and IPC may apply",
+        "Further legal mapping required"
+    ]
+}
+
+
+
+
+==================== app/utils/multilingual.py ====================
+
+from langdetect import detect
+from transformers import MarianMTModel, MarianTokenizer
+import logging
+try:
+    import openai
+    USE_API = True
+except ImportError:
+    USE_API = False
+logging.basicConfig(level=logging.INFO)
+class Translator:
+    def __init__(self):
+        self.models = {}
+        self.tokenizers = {}
+        self.supported_pairs = {
+            "hi": "Helsinki-NLP/opus-mt-en-hi",
+            "ta": "Helsinki-NLP/opus-mt-en-ta",
+            "es": "Helsinki-NLP/opus-mt-en-es"
+        }
+    def _load_model(self, lang):
+        if lang not in self.models:
+            model_name = self.supported_pairs.get(lang)
+            if not model_name:
+                raise ValueError(f"Language {lang} not supported offline")
+            self.tokenizers[lang] = MarianTokenizer.from_pretrained(model_name)
+            self.models[lang] = MarianMTModel.from_pretrained(model_name)
+    def detect_language(self, text: str) -> str:
+        try:
+            return detect(text)
+        except Exception as e:
+            logging.error(f"Language detection failed: {e}")
+            return "en"
+    def translate(self, text: str, target_lang: str = "en") -> str:
+        if not text:
+            return text
+        if target_lang == "en":
+            src_lang = self.detect_language(text)
+            if src_lang == "en":
+                return text
+        else:
+            src_lang = "en"
+        try:
+            self._load_model(target_lang)
+            tokenizer = self.tokenizers[target_lang]
+            model = self.models[target_lang]
+            inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
+            translated = model.generate(**inputs)
+            return tokenizer.decode(translated[0], skip_special_tokens=True)
+        except Exception as e:
+            logging.warning(f"Offline translation failed, fallback to API. Error: {e}")
+            if USE_API:
+                return self._api_translate(text, target_lang)
+            return text
+    def _api_translate(self, text: str, target_lang: str) -> str:
+        try:
+            resp = openai.ChatCompletion.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": f"Translate this text into {target_lang}."},
+                    {"role": "user", "content": text}
+                ]
+            )
+            return resp["choices"][0]["message"]["content"]
+        except Exception as e:
+            logging.error(f"API translation failed: {e}")
+            return text
+
+
+
+
+==================== app/utils/pdf_tools.py ====================
+
+import os
+import fitz
+import pytesseract
+from google.cloud import vision
+from google.api_core.exceptions import GoogleAPICallError, PermissionDenied
+def extract_text_from_pdf(filepath):
+    if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        try:
+            return extract_text_with_google_vision(filepath)
+        except (GoogleAPICallError, PermissionDenied, Exception) as e:
+            print(f"Google Cloud Vision failed: {e}. Falling back to Tesseract.")
+            return extract_text_with_tesseract(filepath)
+    else:
+        print("Google Cloud credentials not found. Using Tesseract.")
+        return extract_text_with_tesseract(filepath)
+def extract_text_with_google_vision(filepath):
+    client = vision.ImageAnnotatorClient()
+    with open(filepath, "rb") as f:
+        content = f.read()
+    input_config = vision.InputConfig(content=content, mime_type='application/pdf')
+    features = [vision.Feature(type_=vision.Feature.Type.DOCUMENT_TEXT_DETECTION)]
+    request = vision.AnnotateFileRequest(
+        input_config=input_config,
+        features=features,
+    )
+    response = client.annotate_file(request=request)
+    all_text = ""
+    for annotation in response.responses:
+        all_text += annotation.full_text_annotation.text
+    return all_text.strip()
+def extract_text_with_tesseract(filepath):
+    try:
+        doc = fitz.open(filepath)
+        all_text = ""
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            pix = page.get_pixmap()
+            img_bytes = pix.tobytes("png")
+            text = pytesseract.image_to_string(img_bytes)
+            all_text += text
+        return all_text.strip()
+    except Exception as e:
+        return f"[Error extracting PDF text with Tesseract: {e}]"
+
+
+
+
+==================== app/utils/refine.py ====================
+
+import re
+from datetime import datetime
+def refine_extracted_text(text):
+    refined_data = {
+        "phone_numbers": extract_phone_numbers(text),
+        "emails": extract_emails(text),
+        "upi_ids": extract_upi_ids(text),
+        "dates": extract_dates(text),
+        "amounts": extract_amounts(text),
+        "key_sentences": extract_key_sentences(text),
+    }
+    return refined_data
+def extract_phone_numbers(text):
+    return re.findall(r'(?:(?:\+91[-\s]?)?|0)?[789]\d{9}', text)
+def extract_emails(text):
+    return re.findall(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', text)
+def extract_upi_ids(text):
+    return re.findall(r'\b\w+@\w+\b', text)
+def extract_dates(text):
+    date_patterns = re.findall(r'\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}', text)
+    date_formats = []
+    for d in date_patterns:
+        try:
+            dt = datetime.strptime(d, "%d/%m/%Y")
+            date_formats.append(dt.strftime("%Y-%m-%d"))
+        except:
+            continue
+    return date_formats
+def extract_amounts(text):
+    return re.findall(r'₹\s?\d+(?:,\d{3})*(?:\.\d+)?', text)
+def extract_key_sentences(text):
+    key_sentences = []
+    for line in text.split("\n"):
+        if any(keyword in line.lower() for keyword in ["fraud", "scam", "lost", "transaction", "complaint"]):
+            key_sentences.append(line.strip())
+    return key_sentences[:5]
+
+
+
+
+==================== app/utils/suspect_utils.py ====================
+
+import re
+import os
+import socket
+import hashlib
+import json
+import tldextract
+import whois
+import dns.resolver
+from ipwhois import IPWhois
+import google.generativeai as genai
+from openai import OpenAI
+from tavily import TavilyClient
+gemini_model = None
+if os.getenv("GOOGLE_API_KEY") and os.getenv("GOOGLE_API_KEY") != "YOUR_API_KEY_HERE":
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+openai_client = None
+if os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_API_KEY") != "YOUR_API_KEY_HERE":
+    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+def inspect_urls(urls: list) -> list:
+    print(f"\n[TOOL CALLED] Running `inspect_urls` for {len(urls)} URLs...")
+    if not urls or not isinstance(urls, list):
+        print("[TOOL SKIPPED] No URLs provided or invalid input.")
+        return []
+    results = []
+    if not isinstance(urls, list): return [{"error": "Input must be a list of URLs."}]
+    for url in urls:
+        entry = {"url": url}
+        try:
+            ext = tldextract.extract(url)
+            domain = f"{ext.domain}.{ext.suffix}"
+            entry["domain"] = domain
+            try:
+                answers = dns.resolver.resolve(domain, "A")
+                entry["dns_resolved_ips"] = [r.to_text() for r in answers]
+            except Exception as e:
+                entry["dns_error"] = str(e)
+            try:
+                w = whois.whois(domain)
+                entry["whois_registrar"] = w.registrar
+                entry["whois_creation_date"] = str(w.creation_date)
+            except Exception as e:
+                entry["whois_error"] = str(e)
+        except Exception as e:
+            entry["error"] = str(e)
+        results.append(entry)
+    print(f"[TOOL RESULT] URL inspection complete. {len(results)} records created.")
+    return results
+def inspect_ips(ips: list) -> list:
+    print(f"\n[TOOL CALLED] Running `inspect_ips` for {len(ips)} IPs...")
+    if not ips or not isinstance(ips, list):
+        print("[TOOL SKIPPED] No IPs provided or invalid input.")
+        return []
+    results = []
+    if not isinstance(ips, list): return [{"error": "Input must be a list of IPs."}]
+    for ip in ips:
+        entry = {"ip": ip}
+        try:
+            obj = IPWhois(ip)
+            rd = obj.lookup_rdap()
+            entry["asn_description"] = rd.get("asn_description")
+            entry["country"] = rd.get("country")
+        except Exception as e:
+            entry["error"] = str(e)
+        results.append(entry)
+    print(f"[TOOL RESULT] IP inspection complete. {len(results)} records created.")
+    return results
+def web_search(query: str) -> dict:
+    print(f"\n[TOOL CALLED] Running `web_search` for query: {query}...")
+    if not query:
+        print("[TOOL SKIPPED] Empty query provided.")
+        return {"results": []}
+    try:
+        api_key = os.getenv("TAVILY_API_KEY")
+        if not api_key:
+            return {"error": "Tavily API key is not configured."}
+        tavily = TavilyClient(api_key=api_key)
+        response = tavily.search(query=query, search_depth="basic", max_results=3)
+        return {"results": response['results']}
+    except Exception as e:
+        print(f"[TOOL ERROR] Tavily search failed: {e}")
+        return {"error": str(e)}
+TOOL_REGISTRY = {
+    "inspect_urls": inspect_urls,
+    "inspect_ips": inspect_ips,
+    "web_search": web_search,
+}
+def chat_with_ai(messages):
+    pass
+def analyze_evidence(text: str = "", file_path: str = None):
+    from app.utils.gemini_agent import run_analysis_agent
+    print("\n--- [START] AI-DRIVEN Forensic Analysis (Wrapper) ---")
+    context = f"## EVIDENCE DESCRIPTION\n{text}\n## EVIDENCE FILE PATH\n{file_path or 'No file provided'}"
+    raw_findings = run_analysis_agent(text_to_analyze=context, report_id=0, file_path=file_path)
+    initial_artifacts = {}
+    return {
+        "summary": raw_findings.get("final_summary_text", "Analysis complete."),
+        "suspect_profile": "AI Generated (See Summary)",
+        "clues": [],
+        "artifacts": initial_artifacts,
+        "tool_results": raw_findings.get("tool_results", [])
+    }
+
+
+
+
+==================== app/utils/translate_utils.py ====================
+
+from deep_translator import GoogleTranslator
+def translate_bundle(text: str, target_lang: str = "en") -> dict:
+    if not text:
+        return {"detected_lang": None, "translated": ""}
+    try:
+        detected_lang = GoogleTranslator().detect(text)
+        if detected_lang != target_lang:
+            translated_text = GoogleTranslator(source='auto', target=target_lang).translate(text)
+        else:
+            translated_text = text
+        return {
+            "detected_lang": detected_lang,
+            "translated": translated_text
+        }
+    except Exception as e:
+        return {
+            "detected_lang": None,
+            "translated": text
+        }
+
+
+
+
+==================== celery_worker.py ====================
+
+from celery import Celery
+import os
+from dotenv import load_dotenv
+load_dotenv()
+celery = Celery(
+    'tasks',
+    broker=os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0'),
+    backend=os.getenv('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
+)
+celery.conf.update(
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='UTC',
+    enable_utc=True,
+)
+from app.tasks import *
+
+
+
+
+==================== combine.js ====================
+
+
+
+const fs = require('fs').promises;
+const path = require('path');
+
+const OUTPUT_FILE = 'code.txt';
+const SPACER = '\n\n\n\n\n';
+
+const EXCLUDED_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg',
+  '.mp4', '.mp3', '.wav', '.avi', '.mov', '.webm',
+  '.apk', '.zip', '.jar', '.dex', '.ttf', '.ico', '.webp',
+  '.data', '.index', '.prof', '.tfevents', '.bin', '.so',
+  '.exe', '.dll', '.o', '.a', '.dylib', '.class', '.pyc',
+  '.pyo', '.pyd', '.whl', '.egg','.json','.geojson'
+]);
+
+const EXCLUDED_DIRECTORIES = new Set([
+  'node_modules',
+  'venv',
+  'env',
+  '.venv',
+  '__pycache__',
+  '.git',
+  '.pytest_cache',
+  'dist',
+  'build',
+  '.egg-info',
+  '.tox',
+  'site-packages',
+  '.next',
+  'out',
+  'coverage',
+  '.nyc_output',
+  '.cache',
+  '.idea',
+  '.vscode',
+  'instance',
+  'migrations',
+  'uploads',
+  '.geojson',
+  'target',
+  'bin',
+  'obj',
+  '.gradle',
+  '.mvn',
+  '.json'
+]);
+
+const EXCLUDED_FILE_NAMES = new Set([
+  OUTPUT_FILE,
+  'package-lock.json',
+  'yarn.lock',
+  'poetry.lock',
+  'Pipfile.lock',
+  'india.geojson',
+  '.DS_Store',
+  'thumbs.db',
+  '.gitignore',
+  '.gitkeep',
+]);
+
+const EXCLUDED_PATTERNS = [
+  /^\./,   /\.log$/,   /\.tmp$/,   /\.cache$/, ];
+
+const COMMENT_SUPPORT = {
+    cStyle: ['.js', '.jsx', '.ts', '.tsx', '.java', '.c', '.cpp', '.cc', '.h', '.hpp', '.cs', '.go', '.rs', '.swift', '.kt', '.scala', '.php'],
+    python: ['.py', '.rb', '.sh', '.bash', '.yaml', '.yml', '.r', '.pl', '.conf'],
+    html: ['.html', '.htm', '.xml', '.svg'],
+    css: ['.css', '.scss', '.sass', '.less'],
+    sql: ['.sql'],
+};
+
+function getFileType(fileName) {
+  const ext = path.extname(fileName).toLowerCase();
+
+  if (COMMENT_SUPPORT.cStyle.includes(ext)) return 'cStyle';
+  if (COMMENT_SUPPORT.python.includes(ext)) return 'python';
+  if (COMMENT_SUPPORT.html.includes(ext)) return 'html';
+  if (COMMENT_SUPPORT.css.includes(ext)) return 'css';
+  if (COMMENT_SUPPORT.sql.includes(ext)) return 'sql';
+
+  return null;
+}
+
+function removeComments(content, fileType) {
+  if (!fileType) return content;
+
+  let result = content;
+
+  switch (fileType) {
+    case 'cStyle':
+      result = removeCStyleComments(result);
+      break;
+    case 'python':
+      result = removePythonComments(result);
+      break;
+    case 'html':
+      result = removeHtmlComments(result);
+      break;
+    case 'css':
+      result = removeCssComments(result);
+      break;
+    case 'sql':
+      result = removeSqlComments(result);
+      break;
+  }
+
+    result = result.replace(/\n\s*\n\s*\n+/g, '\n\n');
+
+    result = result.split('\n').map(line => line.trimEnd()).join('\n');
+
+  return result;
+}
+
+function removeCStyleComments(content) {
+  let result = '';
+  let i = 0;
+  let inString = false;
+  let stringChar = '';
+  let inSingleLineComment = false;
+  let inMultiLineComment = false;
+
+  while (i < content.length) {
+    const char = content[i];
+    const nextChar = content[i + 1];
+
+        if (!inSingleLineComment && !inMultiLineComment) {
+      if ((char === '"' || char === "'" || char === '`') && (i === 0 || content[i - 1] !== '\\')) {
+        if (!inString) {
+          inString = true;
+          stringChar = char;
+          result += char;
+          i++;
+          continue;
+        } else if (char === stringChar) {
+          inString = false;
+          stringChar = '';
+          result += char;
+          i++;
+          continue;
+        }
+      }
+    }
+
+    // If in string, just add character
+    if (inString) {
+      result += char;
+      i++;
+      continue;
+    }
+
+    // Handle single-line comments - DON'T preserve the newline
+    if (!inMultiLineComment && char === '/' && nextChar === '/') {
+      inSingleLineComment = true;
+      i += 2;
+      continue;
+    }
+
+    if (inSingleLineComment) {
+      if (char === '\n') {
+        inSingleLineComment = false;
+              }
+      i++;
+      continue;
+    }
+
+        if (!inSingleLineComment && char === '/' && nextChar === '*') {
+      inMultiLineComment = true;
+      i += 2;
+      continue;
+    }
+
+    if (inMultiLineComment) {
+      if (char === '*' && nextChar === '/') {
+        inMultiLineComment = false;
+        i += 2;
+        continue;
+      }
+      i++;
+      continue;
+    }
+
+        result += char;
+    i++;
+  }
+
+  return result;
+}
+
+function removePythonComments(content) {
+  const lines = content.split('\n');
+  const result = [];
+  let inMultiLineString = false;
+  let multiLineChar = '';
+
+  for (let line of lines) {
+    let processedLine = '';
+    let i = 0;
+    let inString = false;
+    let stringChar = '';
+
+    while (i < line.length) {
+      const char = line[i];
+      const next2 = line.substring(i, i + 3);
+
+            if (!inString && (next2 === '"""' || next2 === "'''")) {
+        if (!inMultiLineString) {
+          inMultiLineString = true;
+          multiLineChar = next2;
+          i += 3;
+          continue;
+        } else if (next2 === multiLineChar) {
+          inMultiLineString = false;
+          multiLineChar = '';
+          i += 3;
+          continue;
+        }
+      }
+
+      if (inMultiLineString) {
+        i++;
+        continue;
+      }
+
+            if ((char === '"' || char === "'") && (i === 0 || line[i - 1] !== '\\')) {
+        if (!inString) {
+          inString = true;
+          stringChar = char;
+        } else if (char === stringChar) {
+          inString = false;
+          stringChar = '';
+        }
+        processedLine += char;
+        i++;
+        continue;
+      }
+
+      // Handle comments - everything after # is removed
+      if (!inString && char === '#') {
+        break;
+      }
+
+      processedLine += char;
+      i++;
+    }
+
+    // Only add non-empty lines (no blank line preservation)
+    if (!inMultiLineString) {
+      const trimmed = processedLine.trim();
+      if (trimmed.length > 0) {
+        result.push(processedLine.trimEnd());
+      }
+    }
+  }
+
+  return result.join('\n');
+}
+
+function removeHtmlComments(content) {
+  return content.replace(/<!--[\s\S]*?-->/g, '');
+}
+
+function removeCssComments(content) {
+  return content.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+function removeSqlComments(content) {
+  let result = content;
+
+  // Remove multi-line comments
+  result = result.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Remove single-line comments and empty lines
+  const lines = result.split('\n');
+  const processedLines = lines
+    .map(line => {
+      const commentIndex = line.indexOf('--');
+      if (commentIndex !== -1) {
+        return line.substring(0, commentIndex).trimEnd();
+      }
+      return line.trimEnd();
+    })
+    .filter(line => line.length > 0); // Remove empty lines
+
+  return processedLines.join('\n');
+}
+
+function isReactProject() {
+  try {
+    const packageJson = require('./package.json');
+    return packageJson.dependencies &&
+           (packageJson.dependencies.react || packageJson.devDependencies?.react);
+  } catch {
+    return false;
+  }
+}
+
+function isPythonProject() {
+  try {
+    const files = require('fs').readdirSync('.');
+    return files.includes('requirements.txt') ||
+           files.includes('setup.py') ||
+           files.includes('pyproject.toml') ||
+           files.includes('Pipfile');
+  } catch {
+    return false;
+  }
+}
+
+function shouldExcludeFile(fileName) {
+  if (EXCLUDED_FILE_NAMES.has(fileName)) return true;
+  const ext = path.extname(fileName).toLowerCase();
+  if (EXCLUDED_EXTENSIONS.has(ext)) return true;
+  if (EXCLUDED_PATTERNS.some(pattern => pattern.test(fileName))) return true;
+  return false;
+}
+
+function shouldExcludeDirectory(dirName) {
+  return EXCLUDED_DIRECTORIES.has(dirName);
+}
+
+async function isBinary(filePath) {
+  try {
+    const stat = await fs.stat(filePath);
+    if (!stat.isFile()) return true;
+
+    const buffer = await fs.readFile(filePath);
+    const textChars = buffer.slice(0, 512).toString('utf8');
+    return /\u0000/.test(textChars) || buffer.includes(0x00);
+  } catch (err) {
+    return true;
+  }
+}
+
+async function collectReadableFiles(dirPath, baseDir = null) {
+  if (baseDir === null) baseDir = dirPath;
+
+  const files = [];
+
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+
+      if (entry.isDirectory()) {
+        if (!shouldExcludeDirectory(entry.name)) {
+          console.log(`📁 Scanning directory: ${path.relative(baseDir, fullPath)}/`);
+          const subFiles = await collectReadableFiles(fullPath, baseDir);
+          files.push(...subFiles);
+        } else {
+          console.log(`⏭️  Skipping directory: ${path.relative(baseDir, fullPath)}/`);
+        }
+      } else if (
+        !shouldExcludeFile(entry.name) &&
+        !(await isBinary(fullPath))
+      ) {
+        files.push(fullPath);
+      }
+    }
+  } catch (err) {
+    console.error(`Error reading directory ${dirPath}: ${err.message}`);
+  }
+
+  return files;
+}
+
+async function buildDirectoryTree(dirPath, prefix = '', baseDir = null) {
+  if (baseDir === null) baseDir = dirPath;
+
+  const lines = [];
+
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const isLast = i === entries.length - 1;
+      const connector = isLast ? '└── ' : '├── ';
+      const extension = isLast ? '    ' : '│   ';
+
+      if (entry.isDirectory()) {
+        if (!shouldExcludeDirectory(entry.name)) {
+          lines.push(`${prefix}${connector}${entry.name}/`);
+          const subLines = await buildDirectoryTree(
+            path.join(dirPath, entry.name),
+            prefix + extension,
+            baseDir
+          );
+          lines.push(...subLines);
+        }
+      } else {
+        if (!shouldExcludeFile(entry.name)) {
+          lines.push(`${prefix}${connector}${entry.name}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`Error building tree for ${dirPath}: ${err.message}`);
+  }
+
+  return lines;
+}
+
+async function combineFiles() {
+  console.log('🚀 Combining code files (removing comments)...\n');
+
+  const cwd = process.cwd();
+  const isReact = isReactProject();
+  const isPython = isPythonProject();
+
+  if (isReact) {
+    console.log('📦 Detected React project\n');
+  }
+  if (isPython) {
+    console.log('🐍 Detected Python project\n');
+  }
+  if (!isReact && !isPython) {
+    console.log('📁 Generic project\n');
+  }
+
+  try {
+    console.log('Building directory tree...\n');
+    const treeLines = await buildDirectoryTree(cwd);
+    const treeContent = path.basename(cwd) + '/\n' + treeLines.join('\n');
+    await fs.writeFile(OUTPUT_FILE, treeContent + SPACER);
+
+    console.log('Collecting files...\n');
+    const files = await collectReadableFiles(cwd);
+
+    if (files.length === 0) {
+      console.log('⚠️  No readable files found to combine');
+      return;
+    }
+
+    console.log(`\n📂 Found ${files.length} files to combine\n`);
+
+    let processedCount = 0;
+    let commentRemovedCount = 0;
+
+    for (const filePath of files) {
+      try {
+        const relativePath = path.relative(cwd, filePath);
+        const content = await fs.readFile(filePath, 'utf8');
+
+        const fileType = getFileType(path.basename(filePath));
+        const processedContent = removeComments(content, fileType);
+
+        if (fileType) {
+          console.log(`  ✓ Including (comments removed): ${relativePath}`);
+          commentRemovedCount++;
+        } else {
+          console.log(`  ✓ Including: ${relativePath}`);
+        }
+
+        const header = `==================== ${relativePath} ====================\n\n`;
+        await fs.appendFile(OUTPUT_FILE, header + processedContent + SPACER);
+        processedCount++;
+      } catch (err) {
+        const error = `!!!!!!!!!!!! ERROR reading ${filePath} !!!!!!!!!!!!\n${SPACER}`;
+        await fs.appendFile(OUTPUT_FILE, error);
+        console.error(`  ✗ Skipped ${filePath}: ${err.message}`);
+      }
+    }
+
+    console.log(`\n✅ Done! Output saved to ${OUTPUT_FILE}`);
+    console.log(`📊 Total files combined: ${processedCount}`);
+    console.log(`💬 Files with comments removed: ${commentRemovedCount}`);
+  } catch (err) {
+    console.error(`\n🔥 Fatal error: ${err.message}`);
+  }
+}
+
+combineFiles();
+
+
+
+
+==================== maintenance.flag ====================
+
+True
+
+
+
+
+==================== manual_test.py ====================
+
+import os
+import json
+from dotenv import load_dotenv
+from app.models import create_app
+from app.utils.openrouter_agent import run_analysis_agent
+load_dotenv()
+app = create_app()
+with app.app_context():
+    print("="*60)
+    print("      MANUAL TEST SCRIPT FOR ROBUST HYBRID AI WORKFLOW")
+    print("="*60)
+    print("\n[INPUT] Using the following text for analysis:")
+    print("---------------------------------------------")
+    print(complex_test_text.strip())
+    print("---------------------------------------------")
+    print("\n[STEP 1] Calling the main agent (`run_analysis_agent`)...")
+    print("         This will test the hybrid workflow:")
+    print("         1. Python code will force the first tool call (`extract_artifacts`).")
+    print("         2. The AI will be asked to investigate the results.")
+    analysis_result = run_analysis_agent(text_to_analyze=complex_test_text, report_id=999)
+    print("\n" + "="*60)
+    print("      AGENT WORKFLOW COMPLETE")
+    print("="*60)
+    print("\n[RAW FINDINGS] The raw dictionary produced by the agent is:")
+    print("----------------------------------------------------------")
+    print(json.dumps(analysis_result, indent=2))
+    print("----------------------------------------------------------")
+    print("\n[VERIFICATION]")
+    print("Check the raw findings. It should contain 'initial_artifacts' and 'tool_results'.")
+    print("This proves the hybrid workflow is functioning correctly before the final report is built.")
+    print("\n✅ Manual test script finished.")
+    print("="*60 )
+
+
+
+
+==================== requirements.txt ====================
+
+# Core Flask
+flask==2.3.3
+flask-cors==4.0.0
+flask-jwt-extended==4.6.0
+flask-sqlalchemy==3.0.5
+flask-migrate==4.0.5
+
+# Database
+sqlalchemy==2.0.20
+
+# Security & Auth
+passlib==1.7.4
+werkzeug==2.3.7
+
+# HTTP & Network
+requests==2.31.0
+ipwhois==1.2.0
+dnspython==2.0.0
+python-whois==0.8.0
+
+# OCR & Image Processing
+Pillow==10.0.0
+pytesseract==0.3.10
+piexif==1.1.3
+
+# PDF Processing
+PyMuPDF==1.23.5
+PyPDF2==3.0.1
+python-docx==0.8.11
+
+# AI APIs
+google-generativeai==0.3.2
+google-genai==0.2.2
+google-cloud-vision==3.1.2
+openai==1.6.1
+
+# Task Queue & Background Jobs
+celery==5.3.6
+redis==5.0.1
+rq==1.15.1
+
+# Utilities
+python-dotenv==1.0.0
+phonenumbers==8.13.22
+tldextract==5.1.2
+deep-translator==1.11.4
+tavily-python==0.3.0
+langdetect==0.6.1
+
+# NLP (Warning: Large packages - may slow Docker builds)
+transformers==4.35.0
+torch==2.1.0
+
+# Testing & Development
+pytest==7.4.2
+black==23.7.0
+flake8==6.1.0
+
+
+
+
+==================== run.py ====================
+
+from app.models import create_app, db
+from app.models.models import User
+import click
+from flask_cors import CORS
+app = create_app()
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost", "http://localhost:80", "http://127.0.0.1"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
+@app.cli.command("create-admin")
+@click.argument("username")
+@click.argument("password")
+def create_admin(username, password):
+    with app.app_context():
+        if User.query.filter_by(username=username).first():
+            print(f"Error: User '{username}' already exists.")
+            return
+        new_admin = User(username=username, role='admin')
+        new_admin.set_password(password)
+        db.session.add(new_admin)
+        db.session.commit()
+        print(f"Admin user '{username}' created successfully.")
+@app.cli.command("delete-user")
+@click.argument("username")
+def delete_user(username):
+    with app.app_context():
+        user = User.query.filter_by(username=username).first()
+        if user:
+            db.session.delete(user)
+            db.session.commit()
+            print(f"User '{username}' has been deleted successfully.")
+        else:
+            print(f"Error: User '{username}' not found.")
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, host='0.0.0.0', port=5000)
+
+
+
+
