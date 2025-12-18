@@ -13,7 +13,7 @@ load_dotenv()
 
 # --- NEW: Direct Gemini Configuration for Guidance ---
 # Using the modern and fast Gemini 1.5 Flash model for conversational guidance.
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+GEMINI_API_URL =  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 GEMINI_API_KEYS = [key.strip() for key in os.getenv("GEMINI_API_KEYS", "").split(",") if key.strip()]
 # --- End of New Configuration ---
 

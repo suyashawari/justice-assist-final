@@ -32,8 +32,9 @@ GEMINI_API_KEYS = [key.strip() for key in os.getenv("GEMINI_API_KEYS", "").split
 if not GEMINI_API_KEYS and os.getenv("GOOGLE_API_KEY"):
     GEMINI_API_KEYS = [os.getenv("GOOGLE_API_KEY")]
 
-API_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
-MODEL = "gemini-flash-latest"
+# API_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+API_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+MODEL = "gemini-2.5-flash"
 
 MAX_TURNS = 10
 MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024
